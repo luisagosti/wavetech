@@ -17,6 +17,9 @@
 	<!-- flatpickr -->
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 	<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+	<!-- PDF -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 
 </head>
 
@@ -190,6 +193,19 @@
 																<input type="text" name="cais_embarcacao"
 																	id="cais_embarcacao"
 																	class="focus:ring-indigo-500 focus:border-indigo-500 flex-1 block w-full rounded-none rounded-r-md sm:text-sm border-gray-300">
+															</div>
+														</div>
+													</div>
+
+													<div class="grid grid-cols-3 gap-6">
+														<div class="col-span-3 sm:col-span-2">
+															<label class="block text-sm font-medium text-gray-700">
+																Observações
+															</label>
+															<div class="mt-1">
+																<textarea id="observacoes_embarcacao"
+																	name="observacoes_embarcacao" rows="3"
+																	class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 mt-1 block w-full sm:text-sm border border-gray-300 rounded-md"></textarea>
 															</div>
 														</div>
 													</div>
@@ -455,7 +471,7 @@
 												<button
 													class="toggle-btn absolute top-4 right-4 text-gray-500 text-2xl">+</button>
 											</div>
-											<!-- Wrap the expandable content in a div with the `expandable-section` class and add `hidden` -->
+											<!-- Wrap the expandable content in a div with the`expandable-section` class and add`hidden` -->
 											<div class="mt-5 md:mt-0 md:col-span-2 expandable-section hidden">
 												<form action="#" method="POST">
 													<div class="grid grid-cols-6 gap-6">
@@ -614,7 +630,7 @@
 									<input type="hidden" id="entryId">
 									<div id="modalContent"></div>
 									<div class="flex justify-end gap-2 mt-4">
-										<button onclick="updateEntry()"
+										<button onclick="updateEntry()" id="saveButton"
 											class="bg-blue-500 text-white px-4 py-2 rounded">Salvar</button>
 										<button id="deleteButton"
 											class="bg-red-600 text-white px-5 py-2 rounded hover:bg-red-700 transition">Excluir</button>
@@ -689,19 +705,21 @@
 			snapshot.forEach(doc => {
 				const data = doc.data();
 				const row = `<tr class="border-b">
-						<td class="px-4 py-2">${data.embarcacao.nome}</td>
-						<td class="px-4 py-2">${data.faturacao.fatura}</td>
-						<td class="px-4 py-2">${data.cliente.nome}</td>
-						<td class="px-4 py-2">${data.faturacao.data}</td>
-						<td class="px-4 py-2 flex gap-2">
-							<button onclick="showDetails('${doc.id}')" class="bg-green-500 text-white px-2 py-1 rounded">Detalhes</button>
-						</td>
-					</tr>`;
+                <td class="px-4 py-2">${data.embarcacao.nome}</td>
+                <td class="px-4 py-2">${data.faturacao.fatura}</td>
+                <td class="px-4 py-2">${data.cliente.nome}</td>
+                <td class="px-4 py-2">${data.faturacao.data}</td>
+                <td class="px-4 py-2 flex gap-2">
+                    <button onclick="showDetails('${doc.id}', false)" class="bg-green-500 text-white px-2 py-1 rounded">Detalhes</button>
+                    <button onclick="showDetails('${doc.id}', true)" class="bg-blue-500 text-white px-2 py-1 rounded">Editar</button>
+                </td>
+            </tr>`;
 				tableBody.innerHTML += row;
 			});
 		}
 
-		async function showDetails(id) {
+
+		async function showDetails(id, isEditMode) {
 			const docRef = doc(db, "folhaObra", id);
 			const docSnap = await getDocs(folhaObraCollection);
 			let data;
@@ -709,122 +727,246 @@
 
 			document.getElementById("modal").classList.remove("hidden");
 			document.getElementById("entryId").value = id;
+
+			// Define the edit mode for input fields
+			const disabledAttribute = isEditMode ? "" : "disabled";
+
+			// Get button elements
+			const saveButton = document.getElementById("saveButton");
+			const deleteButton = document.getElementById("deleteButton");
+
+			if (!isEditMode) {
+				saveButton.style.display = "none";
+				deleteButton.style.display = "none";
+			} else {
+				saveButton.style.display = "inline-block";
+				deleteButton.style.display = "inline-block";
+			}
+
+			// Wait for the dynamic content to render before selecting the button
+			setTimeout(() => {
+				const addServicoButton = document.getElementById("addServicoButton");
+				if (addServicoButton) {
+					addServicoButton.style.display = isEditMode ? "inline-block" : "none";
+				}
+			}, 0); // Ensures the DOM is updated before selecting the button
+
 			document.getElementById("modalContent").innerHTML = `
 				<div class="p-6 space-y-6">
 					<div>
-						<h3 class="text-2xl font-semibold text-gray-800 mb-4">Embarcação</h3>
-						<div class="space-y-2">
+						<h3 class="text-2xl font-semibold text-gray-800 mb-4 flex justify-between items-center">
+							Embarcação
+							<button id="toggleEmbarcacaoButton" class="text-xl font-semibold text-gray-600">-</button>
+						</h3>
+							<div class="space-y-2" id="embarcacaoSection">
 							<label class="font-medium text-gray-700">Nome:</label>
-							<input type="text" id="boatName" class="w-full border p-2 rounded-md text-gray-700" value="${data.embarcacao.nome}" >
+							<input type="text" id="boatName" class="w-full border p-2 rounded-md text-gray-700" value="${data.embarcacao.nome}" ${disabledAttribute}>
 		
 							<label class="font-medium text-gray-700">Local:</label>
-							<input type="text" id="boatLocal" class="w-full border p-2 rounded-md text-gray-700" value="${data.embarcacao.local}" >
+							<input type="text" id="boatLocal" class="w-full border p-2 rounded-md text-gray-700" value="${data.embarcacao.local}" ${disabledAttribute}>
 		
 							<label class="font-medium text-gray-700">Cais:</label>
-							<input type="text" id="boatCais" class="w-full border p-2 rounded-md text-gray-700" value="${data.embarcacao.cais}" >
+							<input type="text" id="boatCais" class="w-full border p-2 rounded-md text-gray-700" value="${data.embarcacao.cais}" ${disabledAttribute}>
 						</div>
 					</div>
 		
 					<div class="border-t-2 border-gray-300 pt-6">
-						<h3 class="text-2xl font-semibold text-gray-800 mb-4">Faturação</h3>
-						<div class="space-y-2">
+						<h3 class="text-2xl font-semibold text-gray-800 mb-4 flex justify-between items-center">
+							Faturação
+							<button id="toggleFaturacaoButton" class="text-xl font-semibold text-gray-600">-</button>
+						</h3>
+						<div class="space-y-2" id="faturacaoSection">
 							<label class="font-medium text-gray-700">Fatura:</label>
-							<input type="text" id="invoice" class="w-full border p-2 rounded-md text-gray-700" value="${data.faturacao.fatura}" >
+							<input type="text" id="invoice" class="w-full border p-2 rounded-md text-gray-700" value="${data.faturacao.fatura}" ${disabledAttribute}>
 		
 							<label class="font-medium text-gray-700">Data:</label>
-							<input type="text" id="invoiceDate" class="w-full border p-2 rounded-md text-gray-700" value="${data.faturacao.data}" >
+							<input type="text" id="invoiceDate" class="w-full border p-2 rounded-md text-gray-700" value="${data.faturacao.data}" ${disabledAttribute}>
 		
 							<label class="font-medium text-gray-700">Observações:</label>
-							<input type="text" id="invoiceObs" class="w-full border p-2 rounded-md text-gray-700" value="${data.faturacao.observacoes}" >
+							<input type="text" id="invoiceObs" class="w-full border p-2 rounded-md text-gray-700" value="${data.faturacao.observacoes}" ${disabledAttribute}>
 						</div>
 					</div>
 		
 					<div class="border-t-2 border-gray-300 pt-6">
-						<h3 class="text-2xl font-semibold text-gray-800 mb-4">Cliente</h3>
-						<div class="space-y-2">
+						<h3 class="text-2xl font-semibold text-gray-800 mb-4 flex justify-between items-center">
+							Cliente
+							<button id="toggleClienteButton" class="text-xl font-semibold text-gray-600">-</button>
+						</h3>
+						<div class="space-y-2" id="clienteSection">
 							<label class="font-medium text-gray-700">Nome:</label>
-							<input type="text" id="clientName" class="w-full border p-2 rounded-md text-gray-700" value="${data.cliente.nome}" >
+							<input type="text" id="clientName" class="w-full border p-2 rounded-md text-gray-700" value="${data.cliente.nome}" ${disabledAttribute}>
 		
 							<label class="font-medium text-gray-700">Empresa:</label>
-							<input type="text" id="clientCompany" class="w-full border p-2 rounded-md text-gray-700" value="${data.cliente.empresa}" >
+							<input type="text" id="clientCompany" class="w-full border p-2 rounded-md text-gray-700" value="${data.cliente.empresa}" ${disabledAttribute}>
 		
 							<label class="font-medium text-gray-700">Morada:</label>
-							<input type="text" id="clientAddress" class="w-full border p-2 rounded-md text-gray-700" value="${data.cliente.morada}" >
+							<input type="text" id="clientAddress" class="w-full border p-2 rounded-md text-gray-700" value="${data.cliente.morada}" ${disabledAttribute}>
 		
 							<label class="font-medium text-gray-700">Telefone:</label>
-							<input type="text" id="clientPhone" class="w-full border p-2 rounded-md text-gray-700" value="${data.cliente.telefone}" >
+							<input type="text" id="clientPhone" class="w-full border p-2 rounded-md text-gray-700" value="${data.cliente.telefone}" ${disabledAttribute}>
 		
 							<label class="font-medium text-gray-700">Email:</label>
-							<input type="text" id="clientEmail" class="w-full border p-2 rounded-md text-gray-700" value="${data.cliente.email}" >
+							<input type="text" id="clientEmail" class="w-full border p-2 rounded-md text-gray-700" value="${data.cliente.email}" ${disabledAttribute}>
 						</div>
 					</div>
 		
 					<div class="border-t-2 border-gray-300 pt-6">
-						<h3 class="text-2xl font-semibold text-gray-800 mb-4">Serviços a Executar</h3>
-						<div class="space-y-4">
+						<h3 class="text-2xl font-semibold text-gray-800 mb-4 flex justify-between items-center">
+							Serviços a Executar
+							<button id="toggleServicosButton" class="text-xl font-semibold text-gray-600">-</button>
+						</h3>
+						<div class="space-y-4" id="servicosSection">
 							${data.tarefas.map((tarefa, index) => `
-								<div class="space-y-2">
+								<div class="space-y-2 servico-row" data-id="servico-${index}">
+									<!-- Delete Button (Red X) for the service -->
+									<button class="delete-servico text-red-500 top-2 right-2">
+										Remover
+									</button>
+
+									<label class="mb-2 flex items-center space-x-2 font-medium text-gray-700">
+										<input type="checkbox" class="form-checkbox task-done" data-id="servico-${index}" ${tarefa.checkbox === true ? 'checked' : ''} ${disabledAttribute}>
+										<span>Feito</span>
+									</label>
+
 									<label class="font-medium text-gray-700">Nome:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${tarefa.nome}" >
-		
+									<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-name" data-id="servico-${index}" value="${tarefa.nome}" ${disabledAttribute}>
+
 									<label class="font-medium text-gray-700">Observações:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${tarefa.notes}" >
-		
+									<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-notes" data-id="servico-${index}" value="${tarefa.notes}" ${disabledAttribute}>
+
 									<label class="font-medium text-gray-700">Data de Recepção:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${tarefa.receptionDate}" >
-		
+									<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-receptionDate" data-id="servico-${index}" value="${tarefa.receptionDate}" ${disabledAttribute}>
+
 									<label class="font-medium text-gray-700">Data de Entrega:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${tarefa.deliveryDate}" >
-		
+									<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-deliveryDate" data-id="servico-${index}" value="${tarefa.deliveryDate}" ${disabledAttribute}>
+
 									<label class="font-medium text-gray-700">Responsável:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${tarefa.responsible}" >
+									<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-responsible" data-id="servico-${index}" value="${tarefa.responsible}" ${disabledAttribute}>
 								</div>
 								${index < data.tarefas.length - 1 ? '<hr class="my-4 border-black">' : ''}
 							`).join('')}
+							<button id="addServicoButton" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md">Adicionar Serviço</button>
 						</div>
 					</div>
 		
 					<div class="border-t-2 border-gray-300 pt-6">
-						<h3 class="text-2xl font-semibold text-gray-800 mb-4">Descrição de Trabalhos</h3>
-						<div class="space-y-4">
+						<h3 class="text-2xl font-semibold text-gray-800 mb-4 flex justify-between items-center">
+							Descrição de Trabalhos
+							<button id="toggleDescricaoButton" class="text-xl font-semibold text-gray-600">-</button>
+						</h3>
+						<div class="space-y-4" id="descricaoSection">
 							${data.trabalhos.map((trabalho, index) => `
-								<div class="space-y-2">
-									<label class="font-medium text-gray-700">Data:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${trabalho.date}" >
-		
-									<label class="font-medium text-gray-700">Horas:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${trabalho.hours}" >
-		
-									<label class="font-medium text-gray-700">Colaboradores:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${trabalho.collaborators}" >
-		
-									<label class="font-medium text-gray-700">Descrição:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${trabalho.description}" >
+								<div class="space-y-2 trabalho-row" data-trabalho-index="${index}">
+									<button class="delete-trabalho text-red-500 top-2 right-2">
+										Remover
+									</button>
+
+									<!-- Feito Checkbox -->
+									<div class="flex items-center space-x-2">
+										<input type="checkbox" 
+											class="form-checkbox" 
+											data-trabalho-checkbox="${index}" 
+											${trabalho.checkbox === true ? 'checked' : ''} 
+											${disabledAttribute}>
+										<span class="font-medium text-gray-700">Feito</span>
+									</div>
+
+									<!-- Colaboradores Inputs -->
+									<div class="space-y-2" id="collaboratorsSection">
+										<label class="font-medium text-gray-700">Colaboradores:</label>
+										${trabalho.collaborators.length > 0 ? trabalho.collaborators.map((collaborator, collIndex) => `
+											<div class="space-y-2 collaborator-row" data-collaborator-index="${collIndex}">
+												<div class="flex flex-col sm:flex-row sm:space-x-4 sm:items-center">
+													<div class="flex flex-col sm:flex-1">
+														<label class="font-medium text-gray-700">Nome:</label>
+														<input type="text" 
+															class="w-full border p-2 rounded-md text-gray-700" 
+															placeholder="Nome" 
+															value="${collaborator.name}" 
+															data-collaborator-name="${index}-${collIndex}" 
+															${disabledAttribute}>
+													</div>
+													<div class="flex flex-col sm:flex-1">
+														<label class="font-medium text-gray-700">Horas:</label>
+														<input type="text" 
+															class="w-full border p-2 rounded-md text-gray-700" 
+															placeholder="Horas" 
+															value="${collaborator.hours}" 
+															data-collaborator-hours="${index}-${collIndex}" 
+															${disabledAttribute}>
+													</div>
+													<div class="flex flex-col sm:flex-1">
+														<label class="font-medium text-gray-700">Data:</label>
+														<input type="text" 
+															class="w-full border p-2 rounded-md text-gray-700" 
+															placeholder="Data" 
+															value="${collaborator.date}" 
+															data-collaborator-date="${index}-${collIndex}" 
+															${disabledAttribute}>
+													</div>
+													<!-- Delete Button (Red X) -->
+													<button class="delete-collaborator text-red-500 text-xl">
+														x
+													</button>
+												</div>
+											</div>
+										`).join('') :
+					`<div class="space-y-2 collaborator-row" data-collaborator-index="${collaboratorIndex}">
+											<div class="flex flex-col sm:flex-row sm:space-x-4 sm:items-center">
+												<div class="flex flex-col sm:flex-1">
+													<label class="font-medium text-gray-700">Nome:</label>
+													<input type="text" class="w-full border p-2 rounded-md text-gray-700" placeholder="Nome" 
+														value="" data-collaborator-name="${trabalhoIndex}-${collaboratorIndex}">
+												</div>
+												<div class="flex flex-col sm:flex-1">
+													<label class="font-medium text-gray-700">Horas:</label>
+													<input type="text" class="w-full border p-2 rounded-md text-gray-700" placeholder="Horas" 
+														value="" data-collaborator-hours="${trabalhoIndex}-${collaboratorIndex}">
+												</div>
+												<div class="flex flex-col sm:flex-1">
+													<label class="font-medium text-gray-700">Data:</label>
+													<input type="text" class="w-full border p-2 rounded-md text-gray-700" placeholder="Data" 
+														value="" data-collaborator-date="${trabalhoIndex}-${collaboratorIndex}">
+												</div>
+												<button class="delete-collaborator text-red-500 text-xl">x</button>
+											</div>
+										</div>`}
+									</div>
+									<!-- Add Collaborator Button -->
+									<button class="add-collaborator bg-blue-500 text-white text-sm px-2 py-1 rounded-md hover:bg-blue-600">
+										+ Adicionar Colaborador
+									</button>
 								</div>
 								${index < data.trabalhos.length - 1 ? '<hr class="my-4 border-black">' : ''}
-							`).join('')}
+									`).join('')}
+								</div>
+								<button id="addTrabalhoButton" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md">
+									Adicionar Trabalho
+								</button>
+							</div>
 						</div>
-					</div>
-		
 					<div class="border-t-2 border-gray-300 pt-6">
-						<h3 class="text-2xl font-semibold text-gray-800 mb-4">Materiais</h3>
-						<div class="space-y-4">
+						<h3 class="text-2xl font-semibold text-gray-800 mb-4 flex justify-between items-center">
+							Materiais
+							<button id="toggleMateriaisButton" class="text-xl font-semibold text-gray-600">-</button>
+						</h3>
+						<div class="space-y-4" id="materiaisSection">
 							${data.materiais.map((material, index) => `
 								<div class="space-y-2">
 									<label class="font-medium text-gray-700">Referência:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.referencia}" >
+									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.referencia}" ${disabledAttribute}>
 		
 									<label class="font-medium text-gray-700">Designação:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.designacao}" >
+									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.designacao}" ${disabledAttribute}>
 		
 									<label class="font-medium text-gray-700">Quantidade:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.quantidade}" >
+									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.quantidade}" ${disabledAttribute}>
 		
 									<label class="font-medium text-gray-700">Preço Unitário:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.precoUni}" >
+									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.precoUni}" ${disabledAttribute}>
 		
 									<label class="font-medium text-gray-700">Preço Total:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.precoTotal}" >
+									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.precoTotal}" ${disabledAttribute}>
 								</div>
 								${index < data.materiais.length - 1 ? '<hr class="my-4 border-black">' : ''}
 							`).join('')}
@@ -832,18 +974,333 @@
 		
 						<div class="pt-4">
 							<label class="font-medium text-gray-700">Preço Total (c/ IVA):</label>
-							<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${data.materiais.reduce((acc, material) => acc + parseFloat(material.precoTotalcIva || 0), 0)}" >
+							<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${data.materiais.reduce((acc, material) => acc + parseFloat(material.precoTotalcIva || 0), 0)}" ${disabledAttribute}>
 						</div>
 					</div>
 				</div>
 			`;
+
+			// Select all "Remover" buttons
+			const deleteButtons = document.querySelectorAll('.delete-servico');
+
+			// Add click event listener to each delete button
+			deleteButtons.forEach(button => {
+				button.addEventListener('click', function () {
+					// Find the parent div (servico-row) that contains this button
+					const servicoRow = button.closest('.servico-row');
+
+					// Remove the parent div (service row) from the DOM
+					servicoRow.remove();
+				});
+			});
+
+
+
+			// Add event listener to the delete button for the "trabalho-row"
+			document.querySelectorAll('.delete-trabalho').forEach(deleteButton => {
+				deleteButton.addEventListener('click', function () {
+					// Find the parent `trabalho-row` and remove it from the DOM
+					const trabalhoRow = deleteButton.closest('.trabalho-row');
+					trabalhoRow.remove();
+				});
+			});
+
+			// Add event listener to the delete button for individual collaborators
+			document.querySelectorAll('.delete-collaborator').forEach(deleteButton => {
+				deleteButton.addEventListener('click', function () {
+					// Find the parent `collaborator-row` and remove it from the DOM
+					const collaboratorRow = deleteButton.closest('.collaborator-row');
+					collaboratorRow.remove();
+				});
+			});
+
+
+			// Event delegation to handle the "Adicionar Colaborador" click event
+			document.getElementById('descricaoSection').addEventListener('click', function (event) {
+				// Add collaborator button logic
+				if (event.target && event.target.classList.contains('add-collaborator')) {
+					const trabalhoRow = event.target.closest('.trabalho-row');
+					const trabalhoIndex = trabalhoRow.getAttribute('data-trabalho-index');
+					const collaboratorsSection = trabalhoRow.querySelector('#collaboratorsSection');
+
+					// Get the number of current collaborators in this section
+					const currentCollaborators = trabalhoRow.querySelectorAll('.collaborator-row').length;
+
+					// Clone the first collaborator row and update the data index
+					const newCollaboratorRow = collaboratorsSection.querySelector('.collaborator-row').cloneNode(true);
+					const newCollIndex = currentCollaborators;
+
+					// Update the data index and input values for the new collaborator
+					newCollaboratorRow.setAttribute('data-collaborator-index', newCollIndex);
+					newCollaboratorRow.querySelectorAll('input').forEach(input => {
+						const inputName = input.getAttribute('data-collaborator-name');
+						input.setAttribute('data-collaborator-name', `${trabalhoIndex}-${newCollIndex}`);
+						input.value = '';
+					});
+
+					// Append the new collaborator row to the section
+					collaboratorsSection.appendChild(newCollaboratorRow);
+				}
+
+				// Delete collaborator row logic
+				if (event.target && event.target.classList.contains('delete-collaborator')) {
+					const collaboratorRow = event.target.closest('.collaborator-row');
+					collaboratorRow.remove();
+				}
+			});
+
+
+			document.getElementById("addTrabalhoButton").addEventListener("click", function () {
+				const descricaoSection = document.getElementById("descricaoSection");
+
+				// Create a new "trabalho" div
+				const newTrabalho = document.createElement("div");
+				newTrabalho.classList.add("space-y-2", "relative", "p-4", "border", "rounded-md", "bg-gray-100");
+				newTrabalho.classList.add("trabalho-row");  // Add the class for easy targeting
+
+				// Trabalho content
+				newTrabalho.innerHTML = `
+					<!-- Remove Trabalho Button (smaller "x" in red) -->
+					<button class="absolute top-2 right-2 text-red-500 text-sm font-bold remove-trabalho hover:text-red-700">
+						X
+					</button>
+
+					<!-- Feito Checkbox -->
+					<div class="flex items-center space-x-2">
+						<input type="checkbox" class="form-checkbox" data-trabalho-checkbox>
+						<span class="font-medium text-gray-700">Feito</span>
+					</div>
+
+					<!-- Colaboradores Section -->
+					<div class="space-y-2">
+						<label class="font-medium text-gray-700">Colaboradores:</label>
+						<div class="collaborators-list space-y-2"></div> <!-- Where new collaborators will be added -->
+
+						<!-- Add Collaborator Button -->
+						<button class="add-collaborator bg-blue-500 text-white text-sm px-2 py-1 rounded-md hover:bg-blue-600">
+							+ Adicionar Colaborador
+						</button>
+					</div>`;
+
+				// Append the new trabalho section
+				descricaoSection.appendChild(newTrabalho);
+
+				// Add event listener to remove the trabalho
+				newTrabalho.querySelector(".remove-trabalho").addEventListener("click", function () {
+					newTrabalho.remove();
+				});
+
+				// Add event listener for adding a new collaborator
+				newTrabalho.querySelector(".add-collaborator").addEventListener("click", function () {
+					addCollaborator(newTrabalho.querySelector(".collaborators-list"));
+				});
+			});
+
+			// Function to add a new collaborator
+			function addCollaborator(collaboratorsList) {
+				// Create a new collaborator entry
+				const newCollaborator = document.createElement("div");
+				newCollaborator.classList.add("space-y-2", "relative", "p-2", "border", "rounded-md");
+				newCollaborator.classList.add("collaborator-row"); // Add the class for easy targeting
+
+				newCollaborator.innerHTML = `
+					<!-- Remove Collaborator Button (smaller "x" in red) -->
+					<button class="absolute top-2 right-2 text-red-500 remove-collaborator">
+						x
+					</button>
+
+					<div class="flex flex-col sm:flex-row sm:space-x-4 sm:items-center">
+						<div class="flex flex-col sm:flex-1">
+							<label class="font-medium text-gray-700">Nome:</label>
+							<input type="text" class="w-full border p-2 rounded-md text-gray-700" placeholder="Nome" data-collaborator-name>
+						</div>
+						<div class="flex flex-col sm:flex-1">
+							<label class="font-medium text-gray-700">Horas:</label>
+							<input type="text" class="w-full border p-2 rounded-md text-gray-700" placeholder="Horas" data-collaborator-hours>
+						</div>
+						<div class="flex flex-col sm:flex-1">
+							<label class="font-medium text-gray-700">Data:</label>
+							<input type="text" class="w-full border p-2 rounded-md text-gray-700" placeholder="Data" data-collaborator-date>
+						</div>
+					</div>
+				`;
+
+				// Append the new collaborator entry
+				collaboratorsList.appendChild(newCollaborator);
+
+				// Add event listener to remove this collaborator
+				newCollaborator.querySelector(".remove-collaborator").addEventListener("click", function () {
+					newCollaborator.remove();
+				});
+			}
+
+
+			// Ensure first trabalho (from database) also has "Add Collaborator" and "Remove" buttons
+			document.querySelectorAll(".trabalho").forEach(trabalho => {
+				// Add remove button if missing
+				if (!trabalho.querySelector(".remove-trabalho")) {
+					const removeButton = document.createElement("button");
+					removeButton.className = "absolute top-2 right-2 text-red-500 text-sm font-bold remove-trabalho hover:text-red-700";
+					removeButton.innerHTML = "✖";
+					removeButton.addEventListener("click", function () {
+						trabalho.remove();
+					});
+					trabalho.appendChild(removeButton);
+				}
+
+				// Add "Add Collaborator" button if missing
+				if (!trabalho.querySelector(".add-collaborator")) {
+					const addCollabButton = document.createElement("button");
+					addCollabButton.className = "add-collaborator bg-blue-500 text-white text-sm px-2 py-1 rounded-md hover:bg-blue-600";
+					addCollabButton.innerText = "+ Adicionar Colaborador";
+					addCollabButton.addEventListener("click", function () {
+						addCollaborator(trabalho.querySelector(".collaborators-list"));
+					});
+					trabalho.querySelector(".collaborators-list").after(addCollabButton);
+				}
+			});
+
+			let servicoCount = 0; // Counter to track service numbers
+
+			document.getElementById('addServicoButton').addEventListener('click', function () {
+				const servicosSection = document.getElementById('servicosSection');
+
+				// Increment the counter
+				servicoCount++;
+
+				// Unique ID based on counter
+				const servicoId = `servico-${servicoCount}`;
+
+				// Create the new service block
+				const newServico = document.createElement('div');
+				newServico.classList.add('space-y-2', 'relative', 'border', 'p-4', 'rounded-md', 'bg-gray-100', 'servico-row');
+				newServico.setAttribute('data-id', servicoId); // Store the ID
+
+				newServico.innerHTML = `
+					<button class="absolute top-2 right-2 text-red-500 font-bold removeServicoButton">X</button>
+
+					<label class="mb-2 flex items-center space-x-2 font-medium text-gray-700">
+						<input type="checkbox" class="form-checkbox task-done" data-id="${servicoId}">
+						<span>Feito</span>
+					</label>
+
+					<label class="font-medium text-gray-700">Nome:</label>
+					<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-name" data-id="${servicoId}">
+
+					<label class="font-medium text-gray-700">Observações:</label>
+					<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-notes" data-id="${servicoId}">
+
+					<label class="font-medium text-gray-700">Data de Recepção:</label>
+					<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-receptionDate" data-id="${servicoId}">
+
+					<label class="font-medium text-gray-700">Data de Entrega:</label>
+					<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-deliveryDate" data-id="${servicoId}">
+
+					<label class="font-medium text-gray-700">Responsável:</label>
+					<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-responsible" data-id="${servicoId}">
+				`;
+
+				// Append the new service block to the section
+				servicosSection.appendChild(newServico);
+
+				// Add an event listener to the remove button to remove the service block when clicked
+				newServico.querySelector('.removeServicoButton').addEventListener('click', function () {
+					newServico.remove(); // Remove the service block
+					updateServicoIds(); // Optionally update IDs after removing a service
+				});
+			});
+
+			// Function to update IDs when a service is removed
+			function updateServicoIds() {
+				const servicos = document.querySelectorAll('.servico-row');
+				servicoCount = 0; // Reset counter
+				servicos.forEach((servico, index) => {
+					servicoCount = index + 1; // Assign sequential numbers
+					servico.setAttribute('data-id', `servico-${servicoCount}`);
+					servico.querySelectorAll('[data-id]').forEach(input => {
+						input.setAttribute('data-id', `servico-${servicoCount}`);
+					});
+				});
+			}
+
+			// Get elements - Embarcação
+			const toggleEmbarcacaoButton = document.getElementById('toggleEmbarcacaoButton');
+			const embarcacaoSection = document.getElementById('embarcacaoSection');
+
+			// Add click event listener to toggle visibility
+			toggleEmbarcacaoButton.addEventListener('click', () => {
+				const isVisible = embarcacaoSection.style.display !== 'none';
+				embarcacaoSection.style.display = isVisible ? 'none' : 'block';
+				toggleEmbarcacaoButton.textContent = isVisible ? '+' : '-';
+			});
+
+
+			// Get elements - Faturação
+			const toggleFaturacaoButton = document.getElementById('toggleFaturacaoButton');
+			const faturacaoSection = document.getElementById('faturacaoSection');
+
+			// Add click event listener to toggle visibility
+			toggleFaturacaoButton.addEventListener('click', () => {
+				const isVisible = faturacaoSection.style.display !== 'none';
+				faturacaoSection.style.display = isVisible ? 'none' : 'block';
+				toggleFaturacaoButton.textContent = isVisible ? '+' : '-';
+			});
+
+
+			// Get elements - Cliente
+			const toggleClienteButton = document.getElementById('toggleClienteButton');
+			const clienteSection = document.getElementById('clienteSection');
+
+			// Add click event listener to toggle visibility
+			toggleClienteButton.addEventListener('click', () => {
+				const isVisible = clienteSection.style.display !== 'none';
+				clienteSection.style.display = isVisible ? 'none' : 'block';
+				toggleClienteButton.textContent = isVisible ? '+' : '-';
+			});
+
+
+			// Get elements - Serviços 
+			const toggleServicosButton = document.getElementById('toggleServicosButton');
+			const servicosSection = document.getElementById('servicosSection');
+
+			// Add click event listener to toggle visibility
+			toggleServicosButton.addEventListener('click', () => {
+				const isVisible = servicosSection.style.display !== 'none';
+				servicosSection.style.display = isVisible ? 'none' : 'block';
+				toggleServicosButton.textContent = isVisible ? '+' : '-';
+			});
+
+
+			// Get elements - Descrição  
+			const toggleDescricaoButton = document.getElementById('toggleDescricaoButton');
+			const descricaoSection = document.getElementById('descricaoSection');
+
+			// Add click event listener to toggle visibility
+			toggleDescricaoButton.addEventListener('click', () => {
+				const isVisible = descricaoSection.style.display !== 'none';
+				descricaoSection.style.display = isVisible ? 'none' : 'block';
+				toggleDescricaoButton.textContent = isVisible ? '+' : '-';
+			});
+
+
+			// Get elements - Materiais  
+			const toggleMateriaisButton = document.getElementById('toggleMateriaisButton');
+			const materiaisSection = document.getElementById('materiaisSection');
+
+			// Add click event listener to toggle visibility
+			toggleMateriaisButton.addEventListener('click', () => {
+				const isVisible = materiaisSection.style.display !== 'none';
+				materiaisSection.style.display = isVisible ? 'none' : 'block';
+				toggleMateriaisButton.textContent = isVisible ? '+' : '-';
+			});
 		}
 
-		// Função de confirmação ao salvar
+
+		// Function to confirm before saving
 		async function updateEntry() {
 			const entryId = document.getElementById("entryId").value;
 
-			// Usando SweetAlert para confirmação
+			// Show confirmation dialog
 			const result = await Swal.fire({
 				title: 'Tem certeza?',
 				text: 'Você quer salvar as mudanças?',
@@ -856,61 +1313,109 @@
 
 			if (result.isConfirmed) {
 				try {
-					// A lógica para salvar a entrada vai aqui (atualizar o Firebase)
-					// Exemplo de uma atualização fictícia
 					const docRef = doc(db, "folhaObra", entryId);
-					await updateDoc(docRef, {
-						embarcacao: {
-							nome: document.getElementById('boatName').value,
-							local: document.getElementById('boatLocal').value,
-							cais: document.getElementById('boatCais').value,
-						},
-						faturacao: {
-							fatura: document.getElementById('invoice').value,
-							data: document.getElementById('invoiceDate').value,
-							observacoes: document.getElementById('invoiceObs').value,
-						},
-						cliente: {
-							nome: document.getElementById('clientName').value,
-							empresa: document.getElementById('clientCompany').value,
-							morada: document.getElementById('clientAddress').value,
-							telefone: document.getElementById('clientPhone').value,
-							email: document.getElementById('clientEmail').value,
-						},
-						tarefas: Array.from(document.querySelectorAll('.task-row')).map((taskRow, index) => ({
-							nome: taskRow.querySelector('.task-name').value,
-							notes: taskRow.querySelector('.task-notes').value,
-							receptionDate: taskRow.querySelector('.task-receptionDate').value,
-							deliveryDate: taskRow.querySelector('.task-deliveryDate').value,
-							responsible: taskRow.querySelector('.task-responsible').value,
-						})),
-						trabalhos: Array.from(document.querySelectorAll('.work-row')).map((workRow, index) => ({
-							date: workRow.querySelector('.work-date').value,
-							hours: workRow.querySelector('.work-hours').value,
-							collaborators: workRow.querySelector('.work-collaborators').value,
-							description: workRow.querySelector('.work-description').value,
-						})),
-						materiais: Array.from(document.querySelectorAll('.material-row')).map((materialRow, index) => ({
-							referencia: materialRow.querySelector('.material-referencia').value,
-							designacao: materialRow.querySelector('.material-designacao').value,
-							quantidade: materialRow.querySelector('.material-quantidade').value,
-							precoUni: materialRow.querySelector('.material-precoUni').value,
-							precoTotal: materialRow.querySelector('.material-precoTotal').value,
-						})),
-					});
 
-					// Notificar o usuário que foi salvo com sucesso
+					// Get new tasks from the form
+					const newTarefas = gatherNewTarefas();
+					console.log("New tarefas gathered:", newTarefas);
+
+					// Gather other form data (excluding tarefas for now)
+					const updatedData = gatherFormData();
+					updatedData.tarefas = newTarefas; // Completely replacing tarefas
+
+					console.log("Updated Data to be saved:", updatedData);
+
+					// Update Firestore document (overwrite tarefas completely)
+					await updateDoc(docRef, updatedData);
+
 					Swal.fire('Salvo!', 'As mudanças foram salvas.', 'success');
-
-					// Fechar o modal após salvar
 					closeModal();
-
 				} catch (error) {
 					console.error("Erro ao salvar: ", error);
 					Swal.fire('Erro!', 'Houve um problema ao salvar a entrada.', 'error');
 				}
 			}
 		}
+
+		// Function to gather new tarefas from the form
+		function gatherNewTarefas() {
+			const servicoRows = document.querySelectorAll('.servico-row'); // Dynamically created ones
+			const legacyRows = document.querySelectorAll('#servicosSection > div:not(.servico-row)'); // Firestore-loaded ones
+
+			function extractTarefa(row, index) {
+				return {
+					id: row.dataset.id || `servico-${index}`,
+					nome: row.querySelector('.task-name')?.value || row.querySelector('input:nth-of-type(2)')?.value || "",
+					notes: row.querySelector('.task-notes')?.value || row.querySelector('input:nth-of-type(3)')?.value || "",
+					receptionDate: row.querySelector('.task-receptionDate')?.value || row.querySelector('input:nth-of-type(4)')?.value || "",
+					deliveryDate: row.querySelector('.task-deliveryDate')?.value || row.querySelector('input:nth-of-type(5)')?.value || "",
+					responsible: row.querySelector('.task-responsible')?.value || row.querySelector('input:nth-of-type(6)')?.value || "",
+					checkbox: row.querySelector('.task-done')?.checked || row.querySelector('input[type="checkbox"]')?.checked || false,
+				};
+			}
+
+			return [...servicoRows, ...legacyRows].map(extractTarefa);
+		}
+
+		// Function to generate a unique ID for new tasks
+		function generateTaskId() {
+			return 'task_' + Date.now() + Math.floor(Math.random() * 1000);
+		}
+
+		function gatherFormData() {
+			return {
+				embarcacao: {
+					nome: document.getElementById('boatName')?.value || "",
+					local: document.getElementById('boatLocal')?.value || "",
+					cais: document.getElementById('boatCais')?.value || "",
+				},
+				faturacao: {
+					fatura: document.getElementById('invoice')?.value || "",
+					data: document.getElementById('invoiceDate')?.value || "",
+					observacoes: document.getElementById('invoiceObs')?.value || "",
+				},
+				cliente: {
+					nome: document.getElementById('clientName')?.value || "",
+					empresa: document.getElementById('clientCompany')?.value || "",
+					morada: document.getElementById('clientAddress')?.value || "",
+					telefone: document.getElementById('clientPhone')?.value || "",
+					email: document.getElementById('clientEmail')?.value || "",
+				},
+				trabalhos: Array.from(document.querySelectorAll('.trabalho-row')).map((workRow, trabalhoIndex) => {
+					const checkboxes = workRow.querySelectorAll(`input[data-trabalho-checkbox]`);
+
+					// Gather the 'feito' checkbox data
+					const feitoCheckbox = workRow.querySelector('input[type="checkbox"]');
+					const checkbox = feitoCheckbox?.checked || false;
+
+					// Gather collaborators data
+					const collaborators = Array.from(workRow.querySelectorAll('.collaborator-row')).map((collaboratorRow, collaboratorIndex) => {
+						const nameInput = collaboratorRow.querySelector('input[data-collaborator-name]');
+						const hoursInput = collaboratorRow.querySelector('input[data-collaborator-hours]');
+						const dateInput = collaboratorRow.querySelector('input[data-collaborator-date]');
+
+						return {
+							name: nameInput?.value || "",
+							hours: hoursInput?.value || "",
+							date: dateInput?.value || ""
+						};
+					});
+
+					return {
+						checkbox,
+						collaborators,
+					};
+				}),
+				materiais: Array.from(document.querySelectorAll('.material-row')).map(materialRow => ({
+					referencia: materialRow.querySelector('.material-referencia')?.value || "",
+					designacao: materialRow.querySelector('.material-designacao')?.value || "",
+					quantidade: materialRow.querySelector('.material-quantidade')?.value || "",
+					precoUni: materialRow.querySelector('.material-precoUni')?.value || "",
+					precoTotal: materialRow.querySelector('.material-precoTotal')?.value || "",
+				})),
+			};
+		}
+
 
 		// Função de confirmação ao excluir
 		async function deleteEntry() {
@@ -999,11 +1504,11 @@
 								<textarea id="notes_servicos-${taskId}" rows="2" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"></textarea>
 							</div>
 							<div class="col-span-6 sm:col-span-3">
-								<label for="reception-date-${taskId}" class="block text-sm font-medium text-gray-700">Data de Recepção</label>
+								<label for="reception-date-${taskId}" class="datepicker block text-sm font-medium text-gray-700">Data de Recepção</label>
 								<input type="text" id="reception-date_servicos-${taskId}" class="datepicker mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
 							</div>
 							<div class="col-span-6 sm:col-span-3">
-								<label for="delivery-date-${taskId}" class="block text-sm font-medium text-gray-700">Data de Entrega</label>
+								<label for="delivery-date-${taskId}" class="datepicker block text-sm font-medium text-gray-700">Data de Entrega</label>
 								<input type="text" id="delivery-date_servicos-${taskId}" class="datepicker mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
 							</div>
 							<div class="col-span-6">
@@ -1034,73 +1539,90 @@
 
 		document.addEventListener('DOMContentLoaded', function () {
 			const workTaskList = document.getElementById('work-task-list');
-			const newWorkTaskInput = document.getElementById('tarefas_realizadas');
 			const addWorkTaskBtn = document.getElementById('add-work-task-btn');
-			let taskCounter = 0; // Auto-incrementing ID counter
+			let taskCounter = 0;
 
 			addWorkTaskBtn.addEventListener('click', function () {
-				const taskText = newWorkTaskInput.value.trim();
-				if (taskText) {
-					const taskId = `task-${taskCounter}`; // Generate unique ID
+				const taskId = `task-${taskCounter}`;
+				const tbodyId = `collaboratorsBody-${taskCounter}`;
 
-					const taskItem = document.createElement('div');
-					taskItem.className = 'bg-gray-50 p-4 rounded-lg shadow-sm';
-					taskItem.id = taskId;
-					taskItem.innerHTML = `
-							<div class="bg-gray-50 p-4 rounded-lg shadow-sm">
-								<div class="flex items-center justify-between">
-									<label class="flex items-center space-x-3 cursor-pointer">
-										<input type="checkbox" value="checked" id="checkbox_trabalhos-${taskCounter}" class="form-checkbox h-5 w-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500">
-										<span class="text-gray-700 font-medium" id="nome_trabalhos-${taskCounter}">${taskText}</span>
-									</label>
-									<button id="delete_trabalhos-${taskCounter}" class="text-red-500 text-2xl hover:text-red-700" >×</button>
-								</div>
-								<div class="mt-4 grid grid-cols-6 gap-4">
-									<!-- Data -->
-									<div class="col-span-6 sm:col-span-3">
-										<label for="date-${taskCounter}" class="block text-sm font-medium text-gray-700">Data</label>
-										<input type="text" id="date_trabalhos-${taskCounter}" class="datepicker mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
-									</div>
-									<!-- Horas Trabalhadas -->
-									<div class="col-span-6 sm:col-span-3">
-										<label for="hours-${taskCounter}" class="block text-sm font-medium text-gray-700">Horas Trabalhadas</label>
-										<input type="number" id="hours_trabalhos-${taskCounter}" min="1" step="0.5" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
-									</div>
-									<!-- Colaboradores -->
-									<div class="col-span-6">
-										<label for="collaborators-${taskCounter}" class="block text-sm font-medium text-gray-700">Colaboradores</label>
-										<input type="text" id="collaborators_trabalhos-${taskCounter}" placeholder="Nome dos colaboradores separados por vírgula" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
-									</div>
-									<!-- Descrição do Trabalho -->
-									<div class="col-span-6">
-										<label for="description-${taskCounter}" class="block text-sm font-medium text-gray-700">Descrição do Trabalho</label>
-										<textarea id="description_trabalhos-${taskCounter}" rows="2" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"></textarea>
-									</div>
-								</div>
-							</div>
-						`;
+				const taskItem = document.createElement('div');
+				taskItem.className = 'bg-gray-50 p-4 rounded-lg shadow-sm';
+				taskItem.id = taskId;
+				taskItem.innerHTML = `
+                    <div class="bg-gray-50 p-4 rounded-lg shadow-sm">
+    <div class="flex items-center justify-between">
+        <label class="flex items-center space-x-3 cursor-pointer">
+            <input type="checkbox" id="checkbox-${taskCounter}" value="checked" class="form-checkbox h-5 w-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500">
+            <span class="text-gray-700 font-medium">${document.getElementById("tarefas_realizadas").value}</span>
+        </label>
+        <button id="delete-${taskCounter}" class="text-red-500 text-2xl hover:text-red-700">×</button>
+    </div>
 
-					workTaskList.appendChild(taskItem);
-					newWorkTaskInput.value = '';
+    <div class="mt-4">
+        <!-- Tabela de colaboradores -->
+        <button type="button" id="addRowBtn-${taskCounter}" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded my-4">Adicionar Colaborador</button>
 
-					// Apply Flatpickr to newly added date field
-					flatpickr(document.getElementById(`date_trabalhos-${taskCounter}`), {
-						dateFormat: "d/m/Y",
-						allowInput: true
-					});
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white rounded-lg overflow-hidden" id="collaboratorsTable-${taskCounter}">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Horas</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="${tbodyId}" class="divide-y divide-gray-200"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+`;
 
-					// Delete button functionality
-					document.getElementById(`delete_trabalhos-${taskCounter}`).addEventListener('click', function () {
-						const taskItem = document.getElementById(taskId);
-						if (taskItem) {
-							workTaskList.removeChild(taskItem);
-						}
-					});
+				workTaskList.appendChild(taskItem);
 
-					// Increment task counter for next task
-					taskCounter++;
-				}
+				// Add collaborator row functionality
+				document.getElementById(`addRowBtn-${taskCounter}`).addEventListener('click', function () {
+					addCollaboratorRow(tbodyId);
+				});
+
+				// Add delete task functionality
+				document.getElementById(`delete-${taskCounter}`).addEventListener('click', function () {
+					document.getElementById(taskId).remove();
+				});
+
+				taskCounter++; // Increment after task is added
 			});
+
+			function addCollaboratorRow(tbodyId) {
+				const tableBody = document.getElementById(tbodyId);
+				const rowId = `row-${tbodyId}-${tableBody.children.length}`;
+
+				const newRow = document.createElement("tr");
+				newRow.id = rowId;
+				newRow.innerHTML = `
+					<td class="px-6 py-4 whitespace-nowrap">
+						<input type="text" class="w-full border rounded-md" placeholder="Nome do colaborador">
+					</td>
+					<td class="px-6 py-4 whitespace-nowrap">
+						<input type="number" class="w-full border rounded-md" min="1" step="0.5" placeholder="Horas">
+					</td>
+					<td class="px-6 py-4 whitespace-nowrap">
+						<input type="text" class="w-full border rounded-md datepicker" placeholder="Data">
+					</td>
+					<td class="px-6 py-4 whitespace-nowrap">
+						<button class="text-red-500 text-lg hover:text-red-700" onclick="document.getElementById('${rowId}').remove()">×</button>
+					</td>
+				`;
+				tableBody.appendChild(newRow);
+
+				// Apply Flatpickr to all date input fields with the 'datepicker' class
+				flatpickr('.datepicker', {
+					dateFormat: "d/m/Y",
+					allowInput: true
+				});
+			}
 		});
 
 		document.addEventListener('click', function (event) {
@@ -1171,7 +1693,7 @@
 				const newRow = document.createElement("tr");
 				const rowID = `row_${rowCounter}`;
 				newRow.innerHTML = `
-					<td class="hidden">${rowID}</td>
+					<td td class="hidden" > ${rowID}</td >
 					<td class="px-6 py-4 whitespace-nowrap"><input type="text" class="w-full border rounded-md" id="referencia${rowID}"></td>
 					<td class="px-6 py-4 whitespace-nowrap"><input type="number" class="w-full border rounded-md" id="quantidade${rowID}"></td>
 					<td class="px-6 py-4 whitespace-nowrap"><input type="text" class="w-full border rounded-md" id="designacao${rowID}"></td>
@@ -1183,19 +1705,6 @@
 
 			addRow();
 		});
-
-		// JavaScript para controlar as visualizações
-		// document.getElementById("folha-obra").addEventListener("click", function () {
-		// 	// Exibe o conteúdo da Folha de Obra e esconde a Consulta de Folha
-		// 	document.getElementById("folha-obra-conteudo").classList.remove("hidden");
-		// 	document.getElementById("consulta-folha-conteudo").classList.add("hidden");
-		// });
-
-		// document.getElementById("consulta-folha").addEventListener("click", function () {
-		// 	// Exibe o conteúdo da Consulta de Folha e esconde a Folha de Obra
-		// 	document.getElementById("consulta-folha-conteudo").classList.remove("hidden");
-		// 	document.getElementById("folha-obra-conteudo").classList.add("hidden");
-		// });
 
 		// Selecionando os links do menu de desktop
 		const folhaObraDesktopLink = document.getElementById('folha-obra-desktop');
@@ -1267,13 +1776,18 @@
 			return nextId;
 		}
 
-		document.getElementById("saveBtn").addEventListener("click", async function () {
+		document.getElementById("saveBtn").addEventListener("click", async function (event) {
 			event.preventDefault();
+
+			// Capture the current date and time when the button is pressed
+			const timestamp = new Date().toISOString();
+
 			// Collect data (same as before)
 			const embarcacaoData = {
 				nome: document.getElementById("nome_embarcacao").value,
 				local: document.getElementById("local_embarcacao").value,
 				cais: document.getElementById("cais_embarcacao").value,
+				observacoes: document.getElementById("observacoes_embarcacao").value,
 			};
 
 			const faturacaoData = {
@@ -1302,47 +1816,68 @@
 
 			const tarefas = [];
 			let taskCounter = 0;
-			while (document.getElementById(`task-${taskCounter}`)) {
+			while (document.getElementById(`task - ${taskCounter}`)) {
+				const checkboxElement = document.getElementById(`checkbox_servicos - task - ${taskCounter}`);
+				const nomeElement = document.getElementById(`text_servicos - task - ${taskCounter}`);
+				const notesElement = document.getElementById(`notes_servicos - task - ${taskCounter}`);
+				const receptionDateElement = document.getElementById(`reception - date_servicos - task - ${taskCounter}`);
+				const deliveryDateElement = document.getElementById(`delivery - date_servicos - task - ${taskCounter}`);
+				const responsibleElement = document.getElementById(`responsible_servicos - task - ${taskCounter}`);
+
 				const taskData = {
-					nome: document.getElementById(`text_servicos-task-${taskCounter}`)
-						.innerHTML,
-					checkbox: document.getElementById(`checkbox_servicos-task-${taskCounter}`)
-						.checked,
-					notes: document.getElementById(`notes_servicos-task-${taskCounter}`)
-						.value,
-					receptionDate: document.getElementById(
-						`reception-date_servicos-task-${taskCounter}`
-					).value,
-					deliveryDate: document.getElementById(
-						`delivery-date_servicos-task-${taskCounter}`
-					).value,
-					responsible: document.getElementById(
-						`responsible_servicos-task-${taskCounter}`
-					).value,
+					nome: nomeElement ? nomeElement.innerHTML : "",
+					checkbox: checkboxElement ? checkboxElement.checked : "",
+					notes: notesElement ? notesElement.value : "",
+					receptionDate: receptionDateElement ? receptionDateElement.value : "",
+					deliveryDate: deliveryDateElement ? deliveryDateElement.value : "",
+					responsible: responsibleElement ? responsibleElement.value : "",
 				};
+
 				tarefas.push(taskData);
 				taskCounter++;
 			}
 
 			const trabalhos = [];
 			let trabalhoCounter = 0;
+
 			while (document.getElementById(`task-${trabalhoCounter}`)) {
+				const checkboxElement = document.getElementById(`checkbox-${trabalhoCounter}`);
+				const checkboxChecked = checkboxElement ? checkboxElement.checked : false;
+
+				// Get collaborator data, and date should be associated with each collaborator
+				const collaborators = [];
+				const tbody = document.getElementById(`collaboratorsBody-${trabalhoCounter}`);
+
+				// Loop through collaborators and add date to each
+				if (tbody) {
+					const rows = tbody.querySelectorAll('tr');
+					rows.forEach(row => {
+						const nameInput = row.querySelector('input[type="text"]');
+						const hoursInput = row.querySelector('input[type="number"]');
+						const dateInput = row.querySelector('.datepicker'); // Date should be per collaborator
+
+						if (nameInput && hoursInput && dateInput) {
+							collaborators.push({
+								name: nameInput.value,
+								hours: hoursInput.value,
+								date: dateInput.value,  // Add date for each collaborator
+							});
+						}
+					});
+				}
+
 				const trabalhoData = {
-					checkbox: document.getElementById(`checkbox_trabalhos-${trabalhoCounter}`)
-						.checked,
-					date: document.getElementById(`date_trabalhos-${trabalhoCounter}`).value,
-					hours: document.getElementById(`hours_trabalhos-${trabalhoCounter}`)
-						.value,
-					collaborators: document.getElementById(
-						`collaborators_trabalhos-${trabalhoCounter}`
-					).value,
-					description: document.getElementById(
-						`description_trabalhos-${trabalhoCounter}`
-					).value,
+					checkbox: checkboxChecked,
+					collaborators: collaborators,
 				};
-				trabalhos.push(trabalhoData);
+
+				if (collaborators.length > 0) {
+					trabalhos.push(trabalhoData);
+				}
+
 				trabalhoCounter++;
 			}
+
 
 			const materials = [];
 			const rows = document.querySelectorAll("#materialTable tbody tr");
@@ -1382,7 +1917,7 @@
 
 			console.log("Final materials array:", materials);
 
-			// Collect all data into a final object
+			// Collect all data into a final object, including the timestamp
 			const finalData = {
 				embarcacao: embarcacaoData,
 				faturacao: faturacaoData,
@@ -1391,10 +1926,10 @@
 				tarefas: tarefas,
 				trabalhos: trabalhos,
 				materiais: materials,
+				timestamp: timestamp, // Add the timestamp here
 			};
 
 			try {
-				// Get the next available document ID
 				const nextId = await getNextId();
 
 				// Add data to Firestore with the custom document ID
@@ -1427,6 +1962,8 @@
 				});
 			}
 		});
+
+
 	</script>
 </body>
 
