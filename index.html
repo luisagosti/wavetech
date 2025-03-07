@@ -17,8 +17,9 @@
 	<!-- flatpickr -->
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 	<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-	<!-- PDF -->
+	<!-- Include jsPDF -->
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 
 
 </head>
@@ -335,7 +336,7 @@
 														<div class="col-span-3 sm:col-span-2">
 															<label class="block text-sm font-medium text-gray-700">
 																Caixa /
-																Coluna - Nº Serie
+																Coluna-Nº Serie
 															</label>
 															<div class="mt-1 flex rounded-md shadow-sm">
 																<input type="text" name="nserie" id="nserie"
@@ -604,6 +605,7 @@
 							<div class="container mx-auto bg-white p-8 rounded-xl shadow-lg">
 								<h2 class="text-2xl font-semibold text-gray-800 mb-6">Consulta de folhas</h2>
 								<div class="overflow-x-auto">
+
 									<table class="w-full border-collapse text-sm table-auto shadow-sm rounded-lg">
 										<thead>
 											<tr class="bg-gray-100 text-left text-gray-600">
@@ -705,18 +707,257 @@
 			snapshot.forEach(doc => {
 				const data = doc.data();
 				const row = `<tr class="border-b">
-                <td class="px-4 py-2">${data.embarcacao.nome}</td>
-                <td class="px-4 py-2">${data.faturacao.fatura}</td>
-                <td class="px-4 py-2">${data.cliente.nome}</td>
-                <td class="px-4 py-2">${data.faturacao.data}</td>
-                <td class="px-4 py-2 flex gap-2">
-                    <button onclick="showDetails('${doc.id}', false)" class="bg-green-500 text-white px-2 py-1 rounded">Detalhes</button>
-                    <button onclick="showDetails('${doc.id}', true)" class="bg-blue-500 text-white px-2 py-1 rounded">Editar</button>
-                </td>
-            </tr>`;
+            <td class="px-4 py-2">${data.embarcacao.nome}</td>
+            <td class="px-4 py-2">${data.faturacao.fatura}</td>
+            <td class="px-4 py-2">${data.cliente.nome}</td>
+            <td class="px-4 py-2">${data.faturacao.data}</td>
+            <td class="px-4 py-2 flex gap-2">
+                <button onclick="showDetails('${doc.id}', false)" class="bg-green-500 text-white px-2 py-1 rounded">Detalhes</button>
+                <button onclick="showDetails('${doc.id}', true)" class="bg-blue-500 text-white px-2 py-1 rounded">Editar</button>
+                <button class="download-pdf-btn bg-red-500 text-white px-2 py-1 rounded" data-doc-id="${doc.id}">PDF</button>
+            </td>
+        </tr>`;
 				tableBody.innerHTML += row;
 			});
+
+			// Event delegation for dynamically created buttons
+			document.addEventListener("click", async function (event) {
+				// Check if the clicked element has the 'download-pdf-btn' class
+				if (event.target && event.target.classList.contains("download-pdf-btn")) {
+					const docId = event.target.getAttribute("data-doc-id");
+					await downloadPDF(docId); // Call the downloadPDF function with the docId
+				}
+			});
 		}
+
+		async function downloadPDF(docId) {
+			const docRef = doc(folhaObraCollection, docId);
+			const docSnap = await getDoc(docRef);
+
+			if (docSnap.exists()) {
+				const data = docSnap.data();
+				const { jsPDF } = window.jspdf;
+				const doc = new jsPDF();
+
+				// Define the margins and printable area for A4 size
+				const margin = 10;  // 10mm margin from all sides
+				const pageWidth = 210;  // A4 width in mm
+				const pageHeight = 297;  // A4 height in mm
+				const usableWidth = pageWidth - 2 * margin;  // Width for content
+				let yOffset = margin + 20;  // Starting point for content
+
+				// Function to add content and check page overflow
+				function addContent(contentFunction) {
+					contentFunction();
+					// Check if the content has exceeded the page height, if so, add a new page
+					if (yOffset > pageHeight - margin) {
+						doc.addPage();  // Add a new page
+						yOffset = margin;  // Reset yOffset for the new page
+					}
+				}
+
+				// Title Section
+				doc.setFont("helvetica");
+				doc.setFontSize(20);
+				doc.text(`Folha de Obra`, margin, yOffset);  // Starting at the top margin
+				doc.setFontSize(16);
+				doc.text(`Embarcação: ${data.embarcacao.nome}`, margin, yOffset + 10);
+				yOffset += 20;
+
+				// Add extra space between sections for clarity
+				doc.setLineWidth(0.5);
+				doc.line(margin, yOffset, pageWidth - margin, yOffset); // Horizontal line
+				yOffset += 10;
+
+				// Cliente Section
+				addContent(() => {
+					doc.setFont("helvetica", "bold");
+					doc.text(`Cliente:`, margin, yOffset);
+					doc.setFont("helvetica", "normal");
+					doc.setFontSize(12);
+					yOffset += 5;
+					doc.text(`Exmo. Sr. (a): ${data.cliente.nome}`, margin, yOffset);
+					yOffset += 5;
+					doc.text(`Empresa: ${data.cliente.empresa}`, margin, yOffset);
+					yOffset += 5;
+					doc.text(`Morada: ${data.cliente.morada}`, margin, yOffset);
+					yOffset += 5;
+					doc.text(`Código Postal: ${data.cliente.codigoPostal}`, margin, yOffset);
+					yOffset += 5;
+					doc.text(`Telefone: ${data.cliente.telefone}`, margin, yOffset);
+					yOffset += 5;
+					doc.text(`Email: ${data.cliente.email}`, margin, yOffset);
+					yOffset += 5;
+					doc.text(`Contribuinte: ${data.cliente.contribuinte}`, margin, yOffset);
+					yOffset += 15;
+				});
+
+				// Embarcação Section
+				addContent(() => {
+					doc.setFont("helvetica", "bold");
+					doc.text(`Embarcação:`, margin, yOffset);
+					doc.setFont("helvetica", "normal");
+					doc.setFontSize(12);
+					yOffset += 5;
+					doc.text(`Nome: ${data.embarcacao.nome}`, margin, yOffset);
+					yOffset += 5;
+					doc.text(`Local: ${data.embarcacao.local}`, margin, yOffset);
+					yOffset += 5;
+					doc.text(`Cais/Lugar: ${data.embarcacao.cais}`, margin, yOffset);
+					yOffset += 5;
+					doc.text(`Observações: ${data.embarcacao.observacoes}`, margin, yOffset);
+					yOffset += 15;
+				});
+
+				// Faturação Section
+				addContent(() => {
+					doc.setFont("helvetica", "bold");
+					doc.text(`Faturação:`, margin, yOffset);
+					doc.setFont("helvetica", "normal");
+					doc.setFontSize(12);
+					yOffset += 5;
+					doc.text(`Fatura nº: ${data.faturacao.fatura}`, margin, yOffset);
+					yOffset += 5;
+					doc.text(`Data: ${data.faturacao.data}`, margin, yOffset);
+					yOffset += 5;
+					doc.text(`Observações: ${data.faturacao.observacoes}`, margin, yOffset);
+					yOffset += 15;
+				});
+
+				// Especificações da Embarcação Section
+				addContent(() => {
+					doc.setFont("helvetica", "bold");
+					doc.text(`Detalhes da Embarcação:`, margin, yOffset);
+					doc.setFont("helvetica", "normal");
+					doc.setFontSize(12);
+					yOffset += 5;
+					doc.text(`Marca: ${data.especificacoes.marca}`, margin, yOffset);
+					yOffset += 5;
+					doc.text(`Modelo: ${data.especificacoes.modelo}`, margin, yOffset);
+					yOffset += 5;
+					doc.text(`Tamanho: ${data.especificacoes.tamanho}`, margin, yOffset);
+					yOffset += 5;
+					doc.text(`Motor(s) - Nº de Série: ${data.especificacoes.motor}`, margin, yOffset);
+					yOffset += 5;
+					doc.text(`Caixa/Coluna - Nº Série: ${data.especificacoes.tamanho}`, margin, yOffset);
+					yOffset += 15;
+				});
+
+				// Insert a page break here to start Tarefas, Materiais, and Trabalhos from the second page
+				doc.addPage();
+				yOffset = margin + 20; // Reset the Y offset for the second page
+
+				// Separator line between Faturação and Tarefas
+				doc.line(margin, yOffset, pageWidth - margin, yOffset);
+				yOffset += 5;
+
+				// Tarefas Section (start from second page)
+				addContent(() => {
+					doc.setFont("helvetica", "bold");
+					doc.text(`Tarefas:`, margin, yOffset);
+					doc.setFont("helvetica", "normal");
+					doc.setFontSize(12);
+					yOffset += 10;
+
+					// Loop through each tarefa and add it to the PDF
+					data.tarefas.forEach((tarefa, index) => {
+						doc.setFont("helvetica", "bold");
+						doc.text(`Tarefa ${index + 1}:`, margin, yOffset);
+						doc.setFont("helvetica", "normal");
+						yOffset += 5;
+						doc.text(`Nome: ${tarefa.nome || ''}`, margin, yOffset);
+						yOffset += 5;
+						doc.text(`Responsável: ${tarefa.responsible || ''}`, margin, yOffset);
+						yOffset += 5;
+						doc.text(`Data de Recepção: ${tarefa.receptionDate || ''}`, margin, yOffset);
+						yOffset += 5;
+						doc.text(`Data de Entrega: ${tarefa.deliveryDate || ''}`, margin, yOffset);
+						yOffset += 5;
+						doc.text(`Observações: ${tarefa.notes || ''}`, margin, yOffset);
+						yOffset += 10;
+					});
+				});
+
+				// Separator line between Tarefas and Materiais
+				doc.line(margin, yOffset, pageWidth - margin, yOffset);
+				yOffset += 5;
+
+				// Materiais Section (start from second page)
+				addContent(() => {
+					doc.setFont("helvetica", "bold");
+					doc.text(`Materiais:`, margin, yOffset);
+					doc.setFont("helvetica", "normal");
+					doc.setFontSize(12);
+					yOffset += 10;
+
+					// Loop through each material and add it to the PDF
+					data.materiais.forEach((material, index) => {
+						doc.setFont("helvetica", "bold");
+						doc.text(`Material ${index + 1}:`, margin, yOffset);
+						doc.setFont("helvetica", "normal");
+						yOffset += 5;
+						doc.text(`Designação: ${material.designacao || ''}`, margin, yOffset);
+						yOffset += 5;
+						doc.text(`Preço Unitário: ${material.precoUni || ''}`, margin, yOffset);
+						yOffset += 5;
+						doc.text(`Quantidade: ${material.quantidade || ''}`, margin, yOffset);
+						yOffset += 5;
+						doc.text(`Referência: ${material.referencia || ''}`, margin, yOffset);
+						yOffset += 5;
+						doc.text(`Preço Total: ${material.precoTotal || ''}`, margin, yOffset);
+						yOffset += 5;
+						doc.text(`Preço Total com IVA: ${material.precoTotalcIva || ''}`, margin, yOffset);
+						yOffset += 10;
+					});
+				});
+
+				// Separator line between Materiais and Trabalhos
+				doc.line(margin, yOffset, pageWidth - margin, yOffset);
+				yOffset += 5;
+
+				// Trabalhos Section (start from second page)
+				addContent(() => {
+					doc.setFont("helvetica", "bold");
+					doc.text(`Trabalhos:`, margin, yOffset);
+					doc.setFont("helvetica", "normal");
+					doc.setFontSize(12);
+					yOffset += 10;
+
+					// Loop through each trabalho and add it to the PDF
+					data.trabalhos.forEach((trabalho, index) => {
+						doc.setFont("helvetica", "bold");
+						doc.text(`Trabalho ${index + 1}:`, margin, yOffset);
+						doc.setFont("helvetica", "normal");
+						yOffset += 5;
+						// doc.text(`Nome: ${trabalho.name || ''}`, margin, yOffset);
+						// yOffset += 5;
+						// doc.text(`Data: ${trabalho.date || ''}`, margin, yOffset);
+						// yOffset += 5;
+						// doc.text(`Horas: ${trabalho.hours || ''}`, margin, yOffset);
+						// yOffset += 5;
+
+						if (trabalho.collaborators) {
+							trabalho.collaborators.forEach((collaborator, cIndex) => {
+								doc.text(`Colaborador ${cIndex + 1}: ${collaborator.name || ''}`, margin, yOffset);
+								yOffset += 5;
+								doc.text(`Data: ${collaborator.date || ''}`, margin + 10, yOffset);
+								yOffset += 5;
+								doc.text(`Horas: ${collaborator.hours || ''}`, margin + 10, yOffset);
+								yOffset += 5;
+							});
+						}
+
+						yOffset += 10;  // Space between different trabalhos
+					});
+				});
+
+				// Finalize PDF
+				doc.save(`documento_${docId}.pdf`);
+			}
+		}
+
+
+
 
 
 		async function showDetails(id, isEditMode) {
@@ -758,18 +999,21 @@
 							Embarcação
 							<button id="toggleEmbarcacaoButton" class="text-xl font-semibold text-gray-600">-</button>
 						</h3>
-							<div class="space-y-2" id="embarcacaoSection">
+						<div class="space-y-2" id="embarcacaoSection">
 							<label class="font-medium text-gray-700">Nome:</label>
-							<input type="text" id="boatName" class="w-full border p-2 rounded-md text-gray-700" value="${data.embarcacao.nome}" ${disabledAttribute}>
-		
+							<input type="text" id="boatName" class="w-full border p-2 rounded-md text-gray-700"
+								value="${data.embarcacao.nome}" ${disabledAttribute}>
+
 							<label class="font-medium text-gray-700">Local:</label>
-							<input type="text" id="boatLocal" class="w-full border p-2 rounded-md text-gray-700" value="${data.embarcacao.local}" ${disabledAttribute}>
-		
+							<input type="text" id="boatLocal" class="w-full border p-2 rounded-md text-gray-700"
+								value="${data.embarcacao.local}" ${disabledAttribute}>
+
 							<label class="font-medium text-gray-700">Cais:</label>
-							<input type="text" id="boatCais" class="w-full border p-2 rounded-md text-gray-700" value="${data.embarcacao.cais}" ${disabledAttribute}>
+							<input type="text" id="boatCais" class="w-full border p-2 rounded-md text-gray-700"
+								value="${data.embarcacao.cais}" ${disabledAttribute}>
 						</div>
 					</div>
-		
+
 					<div class="border-t-2 border-gray-300 pt-6">
 						<h3 class="text-2xl font-semibold text-gray-800 mb-4 flex justify-between items-center">
 							Faturação
@@ -777,16 +1021,19 @@
 						</h3>
 						<div class="space-y-2" id="faturacaoSection">
 							<label class="font-medium text-gray-700">Fatura:</label>
-							<input type="text" id="invoice" class="w-full border p-2 rounded-md text-gray-700" value="${data.faturacao.fatura}" ${disabledAttribute}>
-		
+							<input type="text" id="invoice" class="w-full border p-2 rounded-md text-gray-700"
+								value="${data.faturacao.fatura}" ${disabledAttribute}>
+
 							<label class="font-medium text-gray-700">Data:</label>
-							<input type="text" id="invoiceDate" class="w-full border p-2 rounded-md text-gray-700" value="${data.faturacao.data}" ${disabledAttribute}>
-		
+							<input type="text" id="invoiceDate" class="w-full border p-2 rounded-md text-gray-700"
+								value="${data.faturacao.data}" ${disabledAttribute}>
+
 							<label class="font-medium text-gray-700">Observações:</label>
-							<input type="text" id="invoiceObs" class="w-full border p-2 rounded-md text-gray-700" value="${data.faturacao.observacoes}" ${disabledAttribute}>
+							<input type="text" id="invoiceObs" class="w-full border p-2 rounded-md text-gray-700"
+								value="${data.faturacao.observacoes}" ${disabledAttribute}>
 						</div>
 					</div>
-		
+
 					<div class="border-t-2 border-gray-300 pt-6">
 						<h3 class="text-2xl font-semibold text-gray-800 mb-4 flex justify-between items-center">
 							Cliente
@@ -794,22 +1041,27 @@
 						</h3>
 						<div class="space-y-2" id="clienteSection">
 							<label class="font-medium text-gray-700">Nome:</label>
-							<input type="text" id="clientName" class="w-full border p-2 rounded-md text-gray-700" value="${data.cliente.nome}" ${disabledAttribute}>
-		
+							<input type="text" id="clientName" class="w-full border p-2 rounded-md text-gray-700"
+								value="${data.cliente.nome}" ${disabledAttribute}>
+
 							<label class="font-medium text-gray-700">Empresa:</label>
-							<input type="text" id="clientCompany" class="w-full border p-2 rounded-md text-gray-700" value="${data.cliente.empresa}" ${disabledAttribute}>
-		
+							<input type="text" id="clientCompany" class="w-full border p-2 rounded-md text-gray-700"
+								value="${data.cliente.empresa}" ${disabledAttribute}>
+
 							<label class="font-medium text-gray-700">Morada:</label>
-							<input type="text" id="clientAddress" class="w-full border p-2 rounded-md text-gray-700" value="${data.cliente.morada}" ${disabledAttribute}>
-		
+							<input type="text" id="clientAddress" class="w-full border p-2 rounded-md text-gray-700"
+								value="${data.cliente.morada}" ${disabledAttribute}>
+
 							<label class="font-medium text-gray-700">Telefone:</label>
-							<input type="text" id="clientPhone" class="w-full border p-2 rounded-md text-gray-700" value="${data.cliente.telefone}" ${disabledAttribute}>
-		
+							<input type="text" id="clientPhone" class="w-full border p-2 rounded-md text-gray-700"
+								value="${data.cliente.telefone}" ${disabledAttribute}>
+
 							<label class="font-medium text-gray-700">Email:</label>
-							<input type="text" id="clientEmail" class="w-full border p-2 rounded-md text-gray-700" value="${data.cliente.email}" ${disabledAttribute}>
+							<input type="text" id="clientEmail" class="w-full border p-2 rounded-md text-gray-700"
+								value="${data.cliente.email}" ${disabledAttribute}>
 						</div>
 					</div>
-		
+
 					<div class="border-t-2 border-gray-300 pt-6">
 						<h3 class="text-2xl font-semibold text-gray-800 mb-4 flex justify-between items-center">
 							Serviços a Executar
@@ -817,38 +1069,44 @@
 						</h3>
 						<div class="space-y-4" id="servicosSection">
 							${data.tarefas.map((tarefa, index) => `
-								<div class="space-y-2 servico-row" data-id="servico-${index}">
-									<!-- Delete Button (Red X) for the service -->
-									<button class="delete-servico text-red-500 top-2 right-2">
-										Remover
-									</button>
+							<div class="space-y-2 servico-row" data-id="servico-${index}">
+								<!-- Delete Button (Red X) for the service -->
+								<button class="delete-servico text-red-500 top-2 right-2">
+									Remover
+								</button>
 
-									<label class="mb-2 flex items-center space-x-2 font-medium text-gray-700">
-										<input type="checkbox" class="form-checkbox task-done" data-id="servico-${index}" ${tarefa.checkbox === true ? 'checked' : ''} ${disabledAttribute}>
-										<span>Feito</span>
-									</label>
+								<label class="mb-2 flex items-center space-x-2 font-medium text-gray-700">
+									<input type="checkbox" class="form-checkbox task-done" data-id="servico-${index}"
+										${tarefa.checkbox === true ? 'checked' : ''} ${disabledAttribute}>
+									<span>Feito</span>
+								</label>
 
-									<label class="font-medium text-gray-700">Nome:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-name" data-id="servico-${index}" value="${tarefa.nome}" ${disabledAttribute}>
+								<label class="font-medium text-gray-700">Nome:</label>
+								<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-name"
+									data-id="servico-${index}" value="${tarefa.nome}" ${disabledAttribute}>
 
-									<label class="font-medium text-gray-700">Observações:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-notes" data-id="servico-${index}" value="${tarefa.notes}" ${disabledAttribute}>
+								<label class="font-medium text-gray-700">Observações:</label>
+								<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-notes"
+									data-id="servico-${index}" value="${tarefa.notes}" ${disabledAttribute}>
 
-									<label class="font-medium text-gray-700">Data de Recepção:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-receptionDate" data-id="servico-${index}" value="${tarefa.receptionDate}" ${disabledAttribute}>
+								<label class="font-medium text-gray-700">Data de Recepção:</label>
+								<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-receptionDate"
+									data-id="servico-${index}" value="${tarefa.receptionDate}" ${disabledAttribute}>
 
-									<label class="font-medium text-gray-700">Data de Entrega:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-deliveryDate" data-id="servico-${index}" value="${tarefa.deliveryDate}" ${disabledAttribute}>
+								<label class="font-medium text-gray-700">Data de Entrega:</label>
+								<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-deliveryDate"
+									data-id="servico-${index}" value="${tarefa.deliveryDate}" ${disabledAttribute}>
 
-									<label class="font-medium text-gray-700">Responsável:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-responsible" data-id="servico-${index}" value="${tarefa.responsible}" ${disabledAttribute}>
-								</div>
-								${index < data.tarefas.length - 1 ? '<hr class="my-4 border-black">' : ''}
-							`).join('')}
-							<button id="addServicoButton" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md">Adicionar Serviço</button>
+								<label class="font-medium text-gray-700">Responsável:</label>
+								<input type="text" class="w-full border p-2 rounded-md text-gray-700 task-responsible"
+									data-id="servico-${index}" value="${tarefa.responsible}" ${disabledAttribute}>
+							</div>
+							${index < data.tarefas.length - 1 ? '<hr class="my-4 border-black">' : ''} `).join('')} <button
+								id="addServicoButton" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md">Adicionar
+								Serviço</button>
 						</div>
 					</div>
-		
+
 					<div class="border-t-2 border-gray-300 pt-6">
 						<h3 class="text-2xl font-semibold text-gray-800 mb-4 flex justify-between items-center">
 							Descrição de Trabalhos
@@ -856,129 +1114,184 @@
 						</h3>
 						<div class="space-y-4" id="descricaoSection">
 							${data.trabalhos.map((trabalho, index) => `
-								<div class="space-y-2 trabalho-row" data-trabalho-index="${index}">
-									<button class="delete-trabalho text-red-500 top-2 right-2">
-										Remover
-									</button>
+							<div class="space-y-2 trabalho-row" data-trabalho-index="${index}">
+								<button class="delete-trabalho text-red-500 top-2 right-2">
+									Remover
+								</button>
 
-									<!-- Feito Checkbox -->
-									<div class="flex items-center space-x-2">
-										<input type="checkbox" 
-											class="form-checkbox" 
-											data-trabalho-checkbox="${index}" 
-											${trabalho.checkbox === true ? 'checked' : ''} 
-											${disabledAttribute}>
-										<span class="font-medium text-gray-700">Feito</span>
-									</div>
+								<!-- Feito Checkbox -->
+								<div class="flex items-center space-x-2">
+									<input type="checkbox" class="form-checkbox" data-trabalho-checkbox="${index}"
+										${trabalho.checkbox === true ? 'checked' : ''} ${disabledAttribute}>
+									<span class="font-medium text-gray-700">Feito</span>
+								</div>
 
-									<!-- Colaboradores Inputs -->
-									<div class="space-y-2" id="collaboratorsSection">
-										<label class="font-medium text-gray-700">Colaboradores:</label>
-										${trabalho.collaborators.length > 0 ? trabalho.collaborators.map((collaborator, collIndex) => `
-											<div class="space-y-2 collaborator-row" data-collaborator-index="${collIndex}">
-												<div class="flex flex-col sm:flex-row sm:space-x-4 sm:items-center">
-													<div class="flex flex-col sm:flex-1">
-														<label class="font-medium text-gray-700">Nome:</label>
-														<input type="text" 
-															class="w-full border p-2 rounded-md text-gray-700" 
-															placeholder="Nome" 
-															value="${collaborator.name}" 
-															data-collaborator-name="${index}-${collIndex}" 
-															${disabledAttribute}>
-													</div>
-													<div class="flex flex-col sm:flex-1">
-														<label class="font-medium text-gray-700">Horas:</label>
-														<input type="text" 
-															class="w-full border p-2 rounded-md text-gray-700" 
-															placeholder="Horas" 
-															value="${collaborator.hours}" 
-															data-collaborator-hours="${index}-${collIndex}" 
-															${disabledAttribute}>
-													</div>
-													<div class="flex flex-col sm:flex-1">
-														<label class="font-medium text-gray-700">Data:</label>
-														<input type="text" 
-															class="w-full border p-2 rounded-md text-gray-700" 
-															placeholder="Data" 
-															value="${collaborator.date}" 
-															data-collaborator-date="${index}-${collIndex}" 
-															${disabledAttribute}>
-													</div>
-													<!-- Delete Button (Red X) -->
-													<button class="delete-collaborator text-red-500 text-xl">
-														x
-													</button>
-												</div>
+								<!-- Colaboradores Inputs -->
+								<div class="space-y-2" id="collaboratorsSection">
+									<label class="font-medium text-gray-700">Colaboradores:</label>
+									${trabalho.collaborators.length > 0 ? trabalho.collaborators.map((collaborator, collIndex) => `
+									<div class="space-y-2 collaborator-row" data-collaborator-index="${collIndex}">
+										<div class="flex flex-col sm:flex-row sm:space-x-4 sm:items-center">
+											<div class="flex flex-col sm:flex-1">
+												<label class="font-medium text-gray-700">Nome:</label>
+												<input type="text" class="w-full border p-2 rounded-md text-gray-700"
+													placeholder="Nome" value="${collaborator.name}"
+													data-collaborator-name="${index}-${collIndex}" ${disabledAttribute}>
 											</div>
-										`).join('') :
+											<div class="flex flex-col sm:flex-1">
+												<label class="font-medium text-gray-700">Horas:</label>
+												<input type="text" class="w-full border p-2 rounded-md text-gray-700"
+													placeholder="Horas" value="${collaborator.hours}"
+													data-collaborator-hours="${index}-${collIndex}" ${disabledAttribute}>
+											</div>
+											<div class="flex flex-col sm:flex-1">
+												<label class="font-medium text-gray-700">Data:</label>
+												<input type="text" class="w-full border p-2 rounded-md text-gray-700"
+													placeholder="Data" value="${collaborator.date}"
+													data-collaborator-date="${index}-${collIndex}" ${disabledAttribute}>
+											</div>
+											<!-- Delete Button (Red X) -->
+											<button class="delete-collaborator text-red-500 text-xl">
+												x
+											</button>
+										</div>
+									</div>
+									`).join('') :
 					`<div class="space-y-2 collaborator-row" data-collaborator-index="${collaboratorIndex}">
-											<div class="flex flex-col sm:flex-row sm:space-x-4 sm:items-center">
-												<div class="flex flex-col sm:flex-1">
-													<label class="font-medium text-gray-700">Nome:</label>
-													<input type="text" class="w-full border p-2 rounded-md text-gray-700" placeholder="Nome" 
-														value="" data-collaborator-name="${trabalhoIndex}-${collaboratorIndex}">
-												</div>
-												<div class="flex flex-col sm:flex-1">
-													<label class="font-medium text-gray-700">Horas:</label>
-													<input type="text" class="w-full border p-2 rounded-md text-gray-700" placeholder="Horas" 
-														value="" data-collaborator-hours="${trabalhoIndex}-${collaboratorIndex}">
-												</div>
-												<div class="flex flex-col sm:flex-1">
-													<label class="font-medium text-gray-700">Data:</label>
-													<input type="text" class="w-full border p-2 rounded-md text-gray-700" placeholder="Data" 
-														value="" data-collaborator-date="${trabalhoIndex}-${collaboratorIndex}">
-												</div>
-												<button class="delete-collaborator text-red-500 text-xl">x</button>
+										<div class="flex flex-col sm:flex-row sm:space-x-4 sm:items-center">
+											<div class="flex flex-col sm:flex-1">
+												<label class="font-medium text-gray-700">Nome:</label>
+												<input type="text" class="w-full border p-2 rounded-md text-gray-700"
+													placeholder="Nome" value=""
+													data-collaborator-name="${trabalhoIndex}-${collaboratorIndex}">
 											</div>
-										</div>`}
-									</div>
-									<!-- Add Collaborator Button -->
-									<button class="add-collaborator bg-blue-500 text-white text-sm px-2 py-1 rounded-md hover:bg-blue-600">
-										+ Adicionar Colaborador
-									</button>
+											<div class="flex flex-col sm:flex-1">
+												<label class="font-medium text-gray-700">Horas:</label>
+												<input type="text" class="w-full border p-2 rounded-md text-gray-700"
+													placeholder="Horas" value=""
+													data-collaborator-hours="${trabalhoIndex}-${collaboratorIndex}">
+											</div>
+											<div class="flex flex-col sm:flex-1">
+												<label class="font-medium text-gray-700">Data:</label>
+												<input type="text" class="w-full border p-2 rounded-md text-gray-700"
+													placeholder="Data" value=""
+													data-collaborator-date="${trabalhoIndex}-${collaboratorIndex}">
+											</div>
+											<button class="delete-collaborator text-red-500 text-xl">x</button>
+										</div>
+									</div>`}
 								</div>
-								${index < data.trabalhos.length - 1 ? '<hr class="my-4 border-black">' : ''}
-									`).join('')}
-								</div>
+								<!-- Add Collaborator Button -->
+								<button
+									class="add-collaborator bg-blue-500 text-white text-sm px-2 py-1 rounded-md hover:bg-blue-600">
+									+ Adicionar Colaborador
+								</button>
+							</div>
+							${index < data.trabalhos.length - 1 ? '<hr class="my-4 border-black">' : ''} `).join('')} </div>
 								<button id="addTrabalhoButton" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md">
 									Adicionar Trabalho
 								</button>
-							</div>
 						</div>
-					<div class="border-t-2 border-gray-300 pt-6">
+					</div>
+					<div class="border-t-2 border-gray-300 p-6 space-y-6">
 						<h3 class="text-2xl font-semibold text-gray-800 mb-4 flex justify-between items-center">
 							Materiais
 							<button id="toggleMateriaisButton" class="text-xl font-semibold text-gray-600">-</button>
 						</h3>
 						<div class="space-y-4" id="materiaisSection">
 							${data.materiais.map((material, index) => `
-								<div class="space-y-2">
-									<label class="font-medium text-gray-700">Referência:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.referencia}" ${disabledAttribute}>
-		
-									<label class="font-medium text-gray-700">Designação:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.designacao}" ${disabledAttribute}>
-		
-									<label class="font-medium text-gray-700">Quantidade:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.quantidade}" ${disabledAttribute}>
-		
-									<label class="font-medium text-gray-700">Preço Unitário:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.precoUni}" ${disabledAttribute}>
-		
-									<label class="font-medium text-gray-700">Preço Total:</label>
-									<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.precoTotal}" ${disabledAttribute}>
+							<div class="space-y-2 material-entry">
+								<label class="font-medium text-gray-700">Referência:</label>
+								<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.referencia}"
+									${disabledAttribute}>
+
+								<label class="font-medium text-gray-700">Designação:</label>
+								<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.designacao}"
+									${disabledAttribute}>
+
+								<label class="font-medium text-gray-700">Quantidade:</label>
+								<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.quantidade}"
+									${disabledAttribute}>
+
+								<label class="font-medium text-gray-700">Preço Unitário:</label>
+								<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.precoUni}"
+									${disabledAttribute}>
+
+								<label class="font-medium text-gray-700">Preço Total:</label>
+								<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${material.precoTotal}"
+									${disabledAttribute}>
+							</div>
+							${index < data.materiais.length - 1 ? '<hr class="my-4 border-black">' : ''} `).join('')} </div>
+
+								<div class="pt-4">
+									<label class="font-medium text-gray-700">Preço Total (c/ IVA):</label>
+									<input type="text" class="w-full border p-2 rounded-md text-gray-700"
+										value="${data.materiais.reduce((acc, material) => acc + parseFloat(material.precoTotalcIva || 0), 0)}"
+										${disabledAttribute}>
 								</div>
-								${index < data.materiais.length - 1 ? '<hr class="my-4 border-black">' : ''}
-							`).join('')}
-						</div>
-		
-						<div class="pt-4">
-							<label class="font-medium text-gray-700">Preço Total (c/ IVA):</label>
-							<input type="text" class="w-full border p-2 rounded-md text-gray-700" value="${data.materiais.reduce((acc, material) => acc + parseFloat(material.precoTotalcIva || 0), 0)}" ${disabledAttribute}>
+
+								<!-- Button to add new material entry -->
+								<button id="addNewMaterialButton" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md">Adicionar
+									Material</button>
 						</div>
 					</div>
 				</div>
 			`;
+
+			// Get the add button and section to add new material entries
+			const addNewMaterialButton = document.getElementById('addNewMaterialButton');
+			//const materiaisSection = document.getElementById('materiaisSection');
+
+			// Initialize a counter for unique material IDs
+			let materialIdCounter = 1;
+
+			// Template for a new material entry with dynamic ID
+			const newMaterialTemplate = (id) => `
+			<div id="material-${id}" class="space-y-2 relative p-4 border rounded-md bg-gray-100">
+				<button class="delete-btn absolute top-2 right-2 text-red-500 " 
+						style="font-size: 1.2rem;">x</button>
+				
+				<label class="font-medium text-gray-700">Referência:</label>
+				<input type="text" class="w-full border p-2 rounded-md text-gray-700">
+
+				<label class="font-medium text-gray-700">Designação:</label>
+				<input type="text" class="w-full border p-2 rounded-md text-gray-700">
+
+				<label class="font-medium text-gray-700">Quantidade:</label>
+				<input type="text" class="w-full border p-2 rounded-md text-gray-700">
+
+				<label class="font-medium text-gray-700">Preço Unitário:</label>
+				<input type="text" class="w-full border p-2 rounded-md text-gray-700">
+
+				<label class="font-medium text-gray-700">Preço Total:</label>
+				<input type="text" class="w-full border p-2 rounded-md text-gray-700">
+			</div>`;
+
+			// Function to delete a material entry
+			function deleteMaterial(event) {
+				const materialDiv = event.target.closest('div');
+				if (materialDiv) {
+					materialDiv.remove(); // Remove the material entry
+				}
+			}
+
+			// Event listener to add a new material entry
+			addNewMaterialButton.addEventListener('click', () => {
+				// Generate a new material entry with a unique ID
+				const newMaterialHtml = newMaterialTemplate(materialIdCounter);
+
+				// Append the new material entry to the materiaisSection
+				materiaisSection.insertAdjacentHTML('beforeend', newMaterialHtml);
+
+				// Get the newly added delete button and add the event listener
+				const deleteButton = materiaisSection.querySelector(`#material-${materialIdCounter} .delete-btn`);
+				deleteButton.addEventListener('click', deleteMaterial);
+
+				// Increment the counter for the next material entry
+				materialIdCounter++;
+			});
+
+
 
 			// Select all "Remover" buttons
 			const deleteButtons = document.querySelectorAll('.delete-servico');
@@ -1223,7 +1536,7 @@
 				});
 			}
 
-			// Get elements - Embarcação
+			// Get elements-Embarcação
 			const toggleEmbarcacaoButton = document.getElementById('toggleEmbarcacaoButton');
 			const embarcacaoSection = document.getElementById('embarcacaoSection');
 
@@ -1235,7 +1548,7 @@
 			});
 
 
-			// Get elements - Faturação
+			// Get elements-Faturação
 			const toggleFaturacaoButton = document.getElementById('toggleFaturacaoButton');
 			const faturacaoSection = document.getElementById('faturacaoSection');
 
@@ -1247,7 +1560,7 @@
 			});
 
 
-			// Get elements - Cliente
+			// Get elements-Cliente
 			const toggleClienteButton = document.getElementById('toggleClienteButton');
 			const clienteSection = document.getElementById('clienteSection');
 
@@ -1259,7 +1572,7 @@
 			});
 
 
-			// Get elements - Serviços 
+			// Get elements-Serviços 
 			const toggleServicosButton = document.getElementById('toggleServicosButton');
 			const servicosSection = document.getElementById('servicosSection');
 
@@ -1271,7 +1584,7 @@
 			});
 
 
-			// Get elements - Descrição  
+			// Get elements-Descrição  
 			const toggleDescricaoButton = document.getElementById('toggleDescricaoButton');
 			const descricaoSection = document.getElementById('descricaoSection');
 
@@ -1283,7 +1596,7 @@
 			});
 
 
-			// Get elements - Materiais  
+			// Get elements-Materiais  
 			const toggleMateriaisButton = document.getElementById('toggleMateriaisButton');
 			const materiaisSection = document.getElementById('materiaisSection');
 
@@ -1295,12 +1608,82 @@
 			});
 		}
 
+		// MD5 hashing function
+		(function () {
+			var md5 = function (message) {
+				var md5_cycle = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476];
+				var md5_addition = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476];
+
+				var messageLength = message.length;
+				var messageArray = [];
+				for (var i = 0; i < messageLength; i++) {
+					messageArray[i] = message.charCodeAt(i);
+				}
+
+				messageArray.push(0x80);
+				while ((messageArray.length * 8) % 512 != 448) {
+					messageArray.push(0);
+				}
+
+				var lengthBits = messageLength * 8;
+				for (var i = 0; i < 8; i++) {
+					messageArray.push(lengthBits >>> (i * 8) & 0xFF);
+				}
+
+				for (var i = 0; i < messageArray.length; i += 64) {
+					var block = messageArray.slice(i, i + 64);
+					var a = md5_cycle[0];
+					var b = md5_cycle[1];
+					var c = md5_cycle[2];
+					var d = md5_cycle[3];
+
+					for (var j = 0; j < 64; j++) {
+						var f, g;
+						if (j < 16) {
+							f = (b & c) | (~b & d);
+							g = j;
+						} else if (j < 32) {
+							f = (d & b) | (~d & c);
+							g = (5 * j + 1) % 16;
+						} else if (j < 48) {
+							f = b ^ c ^ d;
+							g = (3 * j + 5) % 16;
+						} else {
+							f = c ^ (b | ~d);
+							g = (7 * j) % 16;
+						}
+
+						var temp = d;
+						d = c;
+						c = b;
+						b = b + ((a + f + md5_addition[j % 4] + block[g]) << ((j % 4) * 8)) | 0;
+						a = temp;
+					}
+
+					md5_cycle[0] = (md5_cycle[0] + a) & 0xFFFFFFFF;
+					md5_cycle[1] = (md5_cycle[1] + b) & 0xFFFFFFFF;
+					md5_cycle[2] = (md5_cycle[2] + c) & 0xFFFFFFFF;
+					md5_cycle[3] = (md5_cycle[3] + d) & 0xFFFFFFFF;
+				}
+
+				return (md5_cycle[0] >>> 0).toString(16) + (md5_cycle[1] >>> 0).toString(16) + (md5_cycle[2] >>> 0).toString(16) + (md5_cycle[3] >>> 0).toString(16);
+			};
+
+			window.md5 = md5; // Expose MD5 globally
+		})();
+
 
 		// Function to confirm before saving
 		async function updateEntry() {
+			// Step 3: Check if the hashed password matches the correct hash
+			if (md5(prompt('Por favor, insira a senha para continuar:')) !== 'ca40a21d35d487a5adc1b91a6cda3092') {
+				Swal.fire('Erro!', 'Senha incorreta. Tente novamente.', 'error');
+				return; // Stop further execution if the password is incorrect
+			}
+
 			const entryId = document.getElementById("entryId").value;
 
-			// Show confirmation dialog
+			// Step 4: Show confirmation dialog
 			const result = await Swal.fire({
 				title: 'Tem certeza?',
 				text: 'Você quer salvar as mudanças?',
@@ -1317,13 +1700,13 @@
 
 					// Get new tasks from the form
 					const newTarefas = gatherNewTarefas();
-					console.log("New tarefas gathered:", newTarefas);
+					// console.log("New tarefas gathered:", newTarefas);
 
 					// Gather other form data (excluding tarefas for now)
 					const updatedData = gatherFormData();
 					updatedData.tarefas = newTarefas; // Completely replacing tarefas
 
-					console.log("Updated Data to be saved:", updatedData);
+					// console.log("Updated Data to be saved:", updatedData);
 
 					// Update Firestore document (overwrite tarefas completely)
 					await updateDoc(docRef, updatedData);
@@ -1406,13 +1789,51 @@
 						collaborators,
 					};
 				}),
-				materiais: Array.from(document.querySelectorAll('.material-row')).map(materialRow => ({
-					referencia: materialRow.querySelector('.material-referencia')?.value || "",
-					designacao: materialRow.querySelector('.material-designacao')?.value || "",
-					quantidade: materialRow.querySelector('.material-quantidade')?.value || "",
-					precoUni: materialRow.querySelector('.material-precoUni')?.value || "",
-					precoTotal: materialRow.querySelector('.material-precoTotal')?.value || "",
-				})),
+				materiais: (() => {
+					const materialRows = document.querySelectorAll('#materiaisSection > .material-entry, [id^="material-"]');
+					console.log("Found material rows:", materialRows.length);
+
+					let totalComIva = 0; // Store total value with VAT
+
+					const materiaisArray = Array.from(materialRows).map((materialRow, index) => {
+						console.log(`Processing material row ${index + 1}`);
+
+						const inputs = materialRow.querySelectorAll('input');
+						if (inputs.length < 5) {
+							console.warn(`Material ${index + 1} is missing inputs. Found:`, inputs.length);
+							return {};
+						}
+
+						const referencia = inputs[0]?.value.trim() || "";
+						const designacao = inputs[1]?.value.trim() || "";
+						const quantidade = parseFloat(inputs[2]?.value.trim()) || 0;
+						const precoUni = parseFloat(inputs[3]?.value.trim()) || 0;
+						const precoTotal = parseFloat(inputs[4]?.value.trim()) || 0;
+
+						totalComIva += precoTotal; // Add to total
+
+						console.log(`Material ${index + 1}:`, { referencia, designacao, quantidade, precoUni, precoTotal });
+
+						return {
+							referencia,
+							designacao,
+							quantidade,
+							precoUni,
+							precoTotal,
+						};
+					});
+
+					// Update the total display in the HTML
+					const totalElement = document.getElementById('totalValue');
+					if (totalElement) {
+						totalElement.innerHTML = `<span class="inline-block bg-gray-200 rounded-md px-2 py-1">${totalComIva.toFixed(2)}</span>`;
+					} else {
+						console.warn("Total value element (#totalValue) not found!");
+					}
+
+					return materiaisArray; // Directly return the array instead of keeping it inside 'items'
+				})(),
+
 			};
 		}
 
@@ -1642,7 +2063,6 @@
 			const tableBody = document.querySelector("tbody");
 			const totalCell = document.getElementById("totalValue");
 			const addRowBtn = document.getElementById("addRowBtn");
-			const saveBtn = document.getElementById("saveBtn");
 
 			let rowCounter = 0;
 
@@ -1652,27 +2072,29 @@
 				rows.forEach(row => {
 					const quantityInput = row.querySelector("td:nth-child(2) input");
 					const unitPriceInput = row.querySelector("td:nth-child(4) input");
-					var quantity = parseFloat(quantityInput.value);
-					var unitPrice = parseFloat(unitPriceInput.value);
+
+					// Get the values and set them to 0 if they are empty or not a valid number
+					const quantity = isNaN(parseFloat(quantityInput.value)) || quantityInput.value === "" ? 0 : parseFloat(quantityInput.value);
+					const unitPrice = isNaN(parseFloat(unitPriceInput.value)) || unitPriceInput.value === "" ? 0 : parseFloat(unitPriceInput.value);
 
 					const rowID = row.querySelector("td.hidden").textContent; // Get the row ID
 					const quantidadeDiv = document.getElementById(`quantidade${rowID}`); // Get the dynamically created div
 					const precoUniDiv = document.getElementById(`precoUni${rowID}`); // Get the dynamically created div
 					const precoTotalDiv = document.getElementById(`precoTotal${rowID}`); // Get the dynamically created div
-					// console.log(quantidadeDiv.value, precoUniDiv.value); // Log its value
 
-					if (!isNaN(quantidadeDiv.value) && !isNaN(precoUniDiv.value)) { // Check if both inputs are valid numbers
-						const subtotal = parseFloat(quantidadeDiv.value) * parseFloat(precoUniDiv.value); // Calculate subtotal
-						total += subtotal; // Accumulate total
-						precoTotalDiv.textContent = subtotal.toFixed(2) + "€"; // Update precoTotalDiv with the calculated subtotal
-						totalCell.textContent = total.toFixed(2) * 1.23 + "€"; // Update total cell
-					}
+					if (quantidadeDiv && precoUniDiv && precoTotalDiv) {
+						// Ensure values are numbers and calculate the total for each row
+						const validQuantity = isNaN(parseFloat(quantidadeDiv.value)) || quantidadeDiv.value === "" ? 0 : parseFloat(quantidadeDiv.value);
+						const validUnitPrice = isNaN(parseFloat(precoUniDiv.value)) || precoUniDiv.value === "" ? 0 : parseFloat(precoUniDiv.value);
 
-					if (!quantidadeDiv.value || !precoUniDiv.value) {
-						precoTotalDiv.textContent = "0.00€";
-						totalCell.textContent = "0.00€";
+						const subtotal = validQuantity * validUnitPrice; // Calculate subtotal
+						total += subtotal; // Add to the total
+						precoTotalDiv.textContent = subtotal.toFixed(2) + "€"; // Update the total for the row
 					}
 				});
+
+				// Update the total value with tax (IVA)
+				totalCell.textContent = (total * 1.23).toFixed(2) + "€"; // Update total cell
 			}
 
 			// Add event listener for input changes
@@ -1682,7 +2104,7 @@
 				}
 			});
 
-			// Add event listener for add row button
+			// Add event listener for the add row button
 			addRowBtn.addEventListener("click", function () {
 				addRow();
 			});
@@ -1693,18 +2115,27 @@
 				const newRow = document.createElement("tr");
 				const rowID = `row_${rowCounter}`;
 				newRow.innerHTML = `
-					<td td class="hidden" > ${rowID}</td >
-					<td class="px-6 py-4 whitespace-nowrap"><input type="text" class="w-full border rounded-md" id="referencia${rowID}"></td>
-					<td class="px-6 py-4 whitespace-nowrap"><input type="number" class="w-full border rounded-md" id="quantidade${rowID}"></td>
-					<td class="px-6 py-4 whitespace-nowrap"><input type="text" class="w-full border rounded-md" id="designacao${rowID}"></td>
-					<td class="px-6 py-4 whitespace-nowrap"><input type="number" class="w-full border rounded-md" id="precoUni${rowID}"></td>
-					<td class="px-6 py-4 whitespace-nowrap" id="precoTotal${rowID}">0.00€</td>
-				`;
+            <td class="hidden">${rowID}</td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <input type="text" class="w-full border rounded-md" id="referencia${rowID}">
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <input type="number" class="w-full border rounded-md" id="quantidade${rowID}">
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <input type="text" class="w-full border rounded-md" id="designacao${rowID}">
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <input type="number" class="w-full border rounded-md" id="precoUni${rowID}">
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap" id="precoTotal${rowID}">0.00€</td>
+        `;
 				tableBody.appendChild(newRow);
 			}
 
-			addRow();
+			addRow(); // Add an initial row when the page loads
 		});
+
 
 		// Selecionando os links do menu de desktop
 		const folhaObraDesktopLink = document.getElementById('folha-obra-desktop');
@@ -1816,13 +2247,13 @@
 
 			const tarefas = [];
 			let taskCounter = 0;
-			while (document.getElementById(`task - ${taskCounter}`)) {
-				const checkboxElement = document.getElementById(`checkbox_servicos - task - ${taskCounter}`);
-				const nomeElement = document.getElementById(`text_servicos - task - ${taskCounter}`);
-				const notesElement = document.getElementById(`notes_servicos - task - ${taskCounter}`);
-				const receptionDateElement = document.getElementById(`reception - date_servicos - task - ${taskCounter}`);
-				const deliveryDateElement = document.getElementById(`delivery - date_servicos - task - ${taskCounter}`);
-				const responsibleElement = document.getElementById(`responsible_servicos - task - ${taskCounter}`);
+			while (document.getElementById(`task-${taskCounter}`)) {
+				const checkboxElement = document.getElementById(`checkbox_servicos-task-${taskCounter}`);
+				const nomeElement = document.getElementById(`text_servicos-task-${taskCounter}`);
+				const notesElement = document.getElementById(`notes_servicos-task-${taskCounter}`);
+				const receptionDateElement = document.getElementById(`reception-date_servicos-task-${taskCounter}`);
+				const deliveryDateElement = document.getElementById(`delivery-date_servicos-task-${taskCounter}`);
+				const responsibleElement = document.getElementById(`responsible_servicos-task-${taskCounter}`);
 
 				const taskData = {
 					nome: nomeElement ? nomeElement.innerHTML : "",
@@ -1890,7 +2321,7 @@
 				}
 
 				const rowID = hiddenCell.textContent.trim();
-				console.log("Processing row with ID:", rowID);
+				// console.log("Processing row with ID:", rowID);
 
 				const quantidade = document.getElementById(`quantidade${rowID}`).value;
 				const precoUni = document.getElementById(`precoUni${rowID}`).value;
@@ -1911,11 +2342,11 @@
 					designacao,
 					precoTotalcIva,
 				};
-				console.log("Adding material:", materialData);
+				// console.log("Adding material:", materialData);
 				materials.push(materialData);
 			});
 
-			console.log("Final materials array:", materials);
+			// console.log("Final materials array:", materials);
 
 			// Collect all data into a final object, including the timestamp
 			const finalData = {
@@ -1934,11 +2365,11 @@
 
 				// Add data to Firestore with the custom document ID
 				const docRef = doc(db, "folhaObra", nextId.toString());
-				console.log("Final data:", finalData);
+				// console.log("Final data:", finalData);
 
 				await setDoc(docRef, finalData);
 
-				console.log("Document written with ID: ", nextId);
+				// console.log("Document written with ID: ", nextId);
 
 				// Show a SweetAlert success message
 				await Swal.fire({
